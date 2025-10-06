@@ -1,0 +1,11 @@
+[package]
+name = "surfer_shockwaves"
+version = "2.0.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+extism-pdk = "1.4.1"
+surfer-translation-types.git = "https://gitlab.com/surfer-project/surfer.git"
