@@ -6,13 +6,13 @@ use extism_pdk::host_fn;
 pub use surfer_translation_types::plugin_types::TranslateParams;
 use surfer_translation_types::WaveSource;
 use surfer_translation_types::{
-    translator::VariableNameInfo,
     TranslationResult, SubFieldTranslationResult, ValueRepr, ValueKind, 
     TranslationPreference, VariableInfo,
     VariableMeta as VMeta, VariableValue,
 };
 
 use lazy_static::lazy_static;
+use std::iter::zip;
 use std::sync::Mutex;
 
 use serde_json;
@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use egui::Color32;
 use camino::Utf8PathBuf;
+use num_bigint::{BigInt,BigUint};
 
 type VariableMeta = VMeta<(),()>;
 
@@ -37,7 +38,7 @@ struct Data {
     luts:    LUTMap,
 }
 
-#[derive(Serialize,Deserialize,Debug)]
+#[derive(Serialize,Deserialize,Debug,Clone)]
 struct Translation(Render,Vec<(String,Translation)>);
 
 type Render = Option<(Value,WaveStyle,Prec)>;
@@ -129,7 +130,7 @@ enum TranslatorVariant {
     Styled(WaveStyle, Box<Translator>),
 
     #[serde(alias = "D")]
-    Duplicate(Box<Translator>),
+    Duplicate(String,Box<Translator>),
 }
 
 #[derive(Serialize,Deserialize,Debug,Clone,Copy)]
@@ -146,7 +147,7 @@ enum NumberFormat {
     Bin
 }
 
-#[derive(Serialize,Deserialize,Debug)]
+#[derive(Serialize,Deserialize,Debug,Clone)]
 enum Structure {
     Structure(Vec<(String,Structure)>),
     Ref(String),
@@ -192,34 +193,53 @@ impl Data {
         let ty = self.get_type(signal).unwrap();
 
         // create flattened structure for type
-        let st = self.flat_structure(ty);
+        let st = self.type_structure(ty);
 
         // convert to VariableInfo
         st.convert()
     }
 
     /// Get a structure without references to other types
-    fn flat_structure(&self, ty: &String) -> Structure {
+    fn type_structure(&self, ty: &String) -> Structure {
         // lookup type translator
         let trans = self.get_translator(ty);
 
         // create non-flattened structure for type
-        let mut st = trans.structure();
-
-        // flatten structure
-        self.flatten_structure(&mut st);
-        st
+        self.trans_structure(trans)
     }
 
-    /// Flatten a structure (remove all references)
-    fn flatten_structure(&self, structure: &mut Structure) {
-        match structure {
-            Structure::Structure(subs) => {
-                subs.iter_mut().for_each(|(_name,st)| self.flatten_structure(st))
-            }
-            Structure::Ref(ty) => {
-                *structure = self.flat_structure(ty);
-            }
+    /// Get the (flattened!) structure of a translator
+    fn trans_structure(&self, trans: &Translator) -> Structure {
+        let Translator{trans, ..} = trans;
+        match trans {
+            TranslatorVariant::Ref(ty) => self.type_structure(ty),
+            TranslatorVariant::Sum(translators) => {
+                let ts = translators.iter().map(|t|
+                    match self.trans_structure(t) {
+                        Structure::Structure(s) => s,
+                        Structure::Ref(_) => unreachable!(),
+                    }
+                ).flatten().collect();
+                Structure::Structure(ts)
+            },
+            TranslatorVariant::Product{subs, ..} => Structure::Structure(
+                subs.iter()
+                    .filter(|(name,_)| name.is_some())
+                    .map(|(name,t)| (name.as_ref().unwrap().clone(), self.trans_structure(t)))
+                    .collect()
+                ),
+            TranslatorVariant::Const(_) => Structure::Structure(vec![]),
+            TranslatorVariant::Lut(_, structure) => structure.clone(),
+            TranslatorVariant::Number{..} => Structure::Structure(vec![]),
+            TranslatorVariant::Array{ sub, len, ..} => Structure::Structure(
+                std::iter::repeat(self.trans_structure(sub)).take(*len as usize)
+                    .enumerate().map(|(i,s)| (i.to_string(),s))
+                    .collect()
+            ),
+            TranslatorVariant::Styled(_,translator) => self.trans_structure(translator),
+            TranslatorVariant::Duplicate(name,translator) => Structure::Structure(
+                vec![(name.clone(),self.trans_structure(translator))]
+            ),
         }
     }
 
@@ -244,8 +264,172 @@ impl Data {
     }
 
     /// Translate a value using the provided translator
-    fn translate_with(&self, Translator{width,trans}: &Translator, value: &str) -> Translation {
-        todo!()
+    fn translate_with(&self, translator: &Translator, value: &str) -> Translation {
+        match self.translate_with_opt(translator,value) {
+            Some(t) => t,
+            _ => Translation(Some((String::from("{unknown}"),WaveStyle::Error,11)),vec![])
+        }
+    }
+    fn translate_with_opt(&self, Translator{width,trans}: &Translator, value: &str) -> Option<Translation> {
+        if (*width as usize) < value.len() {
+            return Some(error("{insufficient bits}"));
+        }
+
+        return Some(match trans {
+            TranslatorVariant::Array { sub, len, start, sep, stop, preci, preco } => {
+                let mut subs = vec![];
+                for i in 0u32..*len {
+                    subs.push(self.translate_with(sub,&value[(i*sub.width) as usize..]));
+                }
+
+                let mut res: Vec<&str> = vec![start];
+                for (i,t) in zip(0..,subs.iter()) {
+                    let p = match t.0 {
+                        Some((_,_,p)) => p,
+                        None => 11
+                    };
+                    if p <= *preci {res.push("(");}
+                    res.push(match &t.0 {
+                        Some((v,_,_)) => &v,
+                        None => "{value missing}",
+                    });
+                    if p <= *preci {res.push(")");}
+                    if i!=subs.len()-1 {res.push(sep);}
+                }
+                res.push(stop);
+
+                Translation(
+                    Some((res.join(""),WaveStyle::Normal,*preco)),
+                    subs.into_iter().enumerate().map(|(i,t)| (format!("{i}"),t)).collect()
+                )
+            },
+            TranslatorVariant::Const(t) => {
+                t.clone()
+            }
+            TranslatorVariant::Lut(n,_) => {
+                self.luts.get(n)?.get(value)?.clone()
+            }
+            TranslatorVariant::Duplicate(n,t) => {
+                let translation = self.translate_with(t,value);
+                Translation(translation.0.clone(),vec![(n.clone(),translation)])
+            },
+            TranslatorVariant::Number{format } => {
+                Translation(Some(match format {
+                    NumberFormat::Sig   => {
+                        // slightly cursed way of doing this - convert to base 256 bytes, then to bigint, then to string
+                        let n = (value.len()+7)/8;
+                        let mut bytes = vec![0u8; n];
+                        for i in 0..(8*n) {
+                            let j = if i>=value.len() {0} else {value.len()-1-i};
+                            let c = value.chars().nth(j);
+                            if c == Some('1') {
+                                bytes[i/8] |= (1<<(i%8)) as u8;
+                            } else if c == Some('0') {
+                            } else if let Some(_) = c {
+                                return None;
+                            }
+                        }
+                        
+                        let big = BigInt::from_signed_bytes_be(&bytes);
+
+                        (big.to_string(),WaveStyle::Normal,11)
+                    },
+                    NumberFormat::Unsig => (BigUint::parse_bytes(value.as_bytes(),2)?.to_string(),WaveStyle::Normal,11),
+                    NumberFormat::Bin   => (value.to_string(),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Normal},11),
+                    _ => error("{number format not implemented}").0.unwrap()
+                }),vec![])
+            },
+            TranslatorVariant::Product { subs, start, sep, stop, labels, preci, preco, style } => {
+                let mut sub = vec![];
+                let _ = subs.iter().fold(0usize,|i,(n,t)| {
+                    let translation = self.translate_with(t,&value[i..]);
+                    sub.push((n.clone(),translation));
+                    i+t.width as usize
+                });
+
+                let vals: Vec<&str> = if labels.len()!=0 {
+                    let mut res: Vec<&str> = vec![start];
+                    for (i,(l,(_,t))) in zip(0..,zip(labels,sub.iter())) {
+                        let p = match t.0 {
+                            Some((_,_,p)) => p,
+                            None => 11
+                        };
+                        res.push(l);
+                        if p <= *preci {res.push("(");}
+                        res.push(match &t.0 {
+                            Some((v,_,_)) => v,
+                            None => "{value missing}",
+                        });
+                        if p <= *preci {res.push(")");}
+                        if i!=subs.len()-1 {res.push(sep);}
+                    }
+                    res.push(stop);
+                    res
+                } else {
+                    let mut res: Vec<&str> = vec![start];
+                    for (i,(_,t)) in zip(0..,sub.iter()) {
+                        let p = match t.0 {
+                            Some((_,_,p)) => p,
+                            None => 11
+                        };
+                        if p <= *preci {res.push("(");}
+                        res.push(match &t.0 {
+                            Some((v,_,_)) => &v,
+                            None => "{value missing}",
+                        });
+                        if p <= *preci {res.push(")");}
+                        if i!=subs.len()-1 {res.push(sep);}
+                    }
+                    res.push(stop);
+                    res
+                };
+                let val = vals.join("");
+
+                Translation(
+                    Some((
+                        val,
+                        // take style from other field if specified and present
+                        if *style>=0 {
+                            sub.get(*style as usize)?
+                                .1.0.as_ref()
+                                .map_or(WaveStyle::Normal,|r| r.1)
+                        } else {
+                            WaveStyle::Normal
+                        },
+                        *preco
+                    )),
+                    // filter out subsignals without labels
+                    sub.into_iter().filter_map(|(n,t)| match n {
+                        Some(n) => Some((n,t)),
+                        None => None,
+                    }).collect()
+                )
+            },
+            TranslatorVariant::Ref(ty) => {
+                self.translate_with(&self.get_translator(ty),value)
+            },
+            TranslatorVariant::Sum(translators) => {
+                let n = translators.len();
+                let bits = (usize::BITS - usize::leading_zeros(n)) as usize;
+                let variant = usize::from_str_radix(&value[..bits], 2).ok()?;
+                if variant>=n {return Some(error("{variant out of range}"));}
+                let t = &translators[variant];
+                self.translate_with(t,&value[bits..])
+            },
+            TranslatorVariant::Styled(s, t) => {
+                let translation = self.translate_with(t,value);
+                match translation {
+                    Translation(Some((v,_,p)),sub) => Translation(Some((v,*s,p)),sub),
+                    trans => trans,
+                }
+            },
+        });
+
+
+
+        fn error(msg: &str) -> Translation {
+            Translation(Some((String::from(msg),WaveStyle::Error,11)),vec![])
+        }
     }
 
     /// Get the type of a signal
@@ -308,15 +492,6 @@ impl Structure {
         }
     }
 }
-
-impl Translator {
-    fn structure(&self) -> Structure {
-        todo!()
-    }
-}
-
-
-
 
 
 
