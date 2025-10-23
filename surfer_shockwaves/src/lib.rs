@@ -1,7 +1,9 @@
 
+use compile_time::datetime_str;
 
 use extism_pdk::{plugin_fn, FnResult, Json};
 use extism_pdk::host_fn;
+use extism_pdk::{info,warn,error};
 
 pub use surfer_translation_types::plugin_types::TranslateParams;
 use surfer_translation_types::WaveSource;
@@ -148,10 +150,11 @@ enum NumberFormat {
 }
 
 #[derive(Serialize,Deserialize,Debug,Clone)]
-enum Structure {
-    Structure(Vec<(String,Structure)>),
-    Ref(String),
-}
+struct Structure(Vec<(String,Structure)>);
+// enum Structure {
+//     Structure(Vec<(String,Structure)>),
+//     Ref(String),
+// }
 
 
 
@@ -164,7 +167,17 @@ lazy_static!{
     static ref STATE: Mutex<Data> = Mutex::new(Data::new());
 }
 lazy_static!{
-    static ref TRANSLATOR_NOT_FOUND: Translator = Translator{width:0,trans:TranslatorVariant::Const(Translation(Some((String::from("{translator not found}"),WaveStyle::Error,11)),vec![]))};
+//    static ref TRANSLATOR_NOT_FOUND: Translator = Translator{width:0,trans:TranslatorVariant::Const(Translation(Some((String::from("{translator not found}"),WaveStyle::Error,11)),vec![]))};
+    static ref TRANSLATOR_NOT_FOUND: Translator = 
+        Translator{
+            width:0,
+            trans:TranslatorVariant::Const(
+                Translation(
+                    Some((String::from("{translator not found}"),WaveStyle::Error,11)),
+                    vec![]
+                )
+            )
+        };
 }
 
 
@@ -199,7 +212,7 @@ impl Data {
         st.convert()
     }
 
-    /// Get a structure without references to other types
+    /// Get the structure of a type
     fn type_structure(&self, ty: &String) -> Structure {
         // lookup type translator
         let trans = self.get_translator(ty);
@@ -208,36 +221,33 @@ impl Data {
         self.trans_structure(trans)
     }
 
-    /// Get the (flattened!) structure of a translator
+    /// Get the structure of a translator
     fn trans_structure(&self, trans: &Translator) -> Structure {
         let Translator{trans, ..} = trans;
         match trans {
             TranslatorVariant::Ref(ty) => self.type_structure(ty),
             TranslatorVariant::Sum(translators) => {
                 let ts = translators.iter().map(|t|
-                    match self.trans_structure(t) {
-                        Structure::Structure(s) => s,
-                        Structure::Ref(_) => unreachable!(),
-                    }
+                    self.trans_structure(t).0
                 ).flatten().collect();
-                Structure::Structure(ts)
+                Structure(ts)
             },
-            TranslatorVariant::Product{subs, ..} => Structure::Structure(
+            TranslatorVariant::Product{subs, ..} => Structure(
                 subs.iter()
                     .filter(|(name,_)| name.is_some())
                     .map(|(name,t)| (name.as_ref().unwrap().clone(), self.trans_structure(t)))
                     .collect()
                 ),
-            TranslatorVariant::Const(_) => Structure::Structure(vec![]),
+            TranslatorVariant::Const(t) => Structure::from_trans(t),
             TranslatorVariant::Lut(_, structure) => structure.clone(),
-            TranslatorVariant::Number{..} => Structure::Structure(vec![]),
-            TranslatorVariant::Array{ sub, len, ..} => Structure::Structure(
+            TranslatorVariant::Number{..} => Structure(vec![]),
+            TranslatorVariant::Array{ sub, len, ..} => Structure(
                 std::iter::repeat(self.trans_structure(sub)).take(*len as usize)
                     .enumerate().map(|(i,s)| (i.to_string(),s))
                     .collect()
             ),
             TranslatorVariant::Styled(_,translator) => self.trans_structure(translator),
-            TranslatorVariant::Duplicate(name,translator) => Structure::Structure(
+            TranslatorVariant::Duplicate(name,translator) => Structure(
                 vec![(name.clone(),self.trans_structure(translator))]
             ),
         }
@@ -250,9 +260,13 @@ impl Data {
 
         // lookup type translator
         let translator = self.get_translator(ty);
+        let structure = self.type_structure(ty);
         
         // translate value with translator
-        let translation = self.translate_with(translator,value);
+        let mut translation = self.translate_with(translator,value);
+
+        //fill out missing unknown fields
+        translation.fill(&structure);
         
         // convert to TranslationResult
         translation.convert()
@@ -260,22 +274,27 @@ impl Data {
 
     /// Check whether a signal has a known associated Haskell type.
     fn can_translate(&self, signal: &String) -> bool {
-        self.types.get(signal).is_some()
+        self.signals.get(signal).is_some()
     }
+
+
+
+
 
     /// Translate a value using the provided translator
-    fn translate_with(&self, translator: &Translator, value: &str) -> Translation {
-        match self.translate_with_opt(translator,value) {
-            Some(t) => t,
-            _ => Translation(Some((String::from("{unknown}"),WaveStyle::Error,11)),vec![])
+    // fn translate_with(&self, translator: &Translator, value: &str) -> Translation {
+    //     match self.translate_with_opt(translator,value) {
+    //         Some(t) => t,
+    //         _ => Translation(Some((String::from("{unknown}"),WaveStyle::Error,11)),vec![])
+    //     }
+    // }
+    fn translate_with(&self, Translator{width,trans}: &Translator, value: &str) -> Translation {
+        if (*width as usize) > value.len() {
+            return error("{insufficient bits}");
         }
-    }
-    fn translate_with_opt(&self, Translator{width,trans}: &Translator, value: &str) -> Option<Translation> {
-        if (*width as usize) < value.len() {
-            return Some(error("{insufficient bits}"));
-        }
+        let value = &value[..(*width as usize)];
 
-        return Some(match trans {
+        return match trans {
             TranslatorVariant::Array { sub, len, start, sep, stop, preci, preco } => {
                 let mut subs = vec![];
                 for i in 0u32..*len {
@@ -307,7 +326,13 @@ impl Data {
                 t.clone()
             }
             TranslatorVariant::Lut(n,_) => {
-                self.luts.get(n)?.get(value)?.clone()
+                match self.luts.get(n) {
+                    Some(lut) => match lut.get(value) {
+                        Some(t) => t.clone(),
+                        None => error("{value missing from LUT}"),
+                    },
+                    None => error("{unknown LUT}"),
+                }
             }
             TranslatorVariant::Duplicate(n,t) => {
                 let translation = self.translate_with(t,value);
@@ -325,18 +350,23 @@ impl Data {
                             if c == Some('1') {
                                 bytes[i/8] |= (1<<(i%8)) as u8;
                             } else if c == Some('0') {
-                            } else if let Some(_) = c {
-                                return None;
+                            } else {//if let Some(_) = c {
+                                return error("unknown");
                             }
                         }
                         
-                        let big = BigInt::from_signed_bytes_be(&bytes);
+                        let big = BigInt::from_signed_bytes_le(&bytes);
 
                         (big.to_string(),WaveStyle::Normal,11)
                     },
-                    NumberFormat::Unsig => (BigUint::parse_bytes(value.as_bytes(),2)?.to_string(),WaveStyle::Normal,11),
+                    NumberFormat::Unsig => {
+                        match BigUint::parse_bytes(value.as_bytes(),2) {
+                            Some(big) => (big.to_string(),WaveStyle::Normal,11),
+                            None => {return error("unknown")},
+                        }
+                    },
                     NumberFormat::Bin   => (value.to_string(),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Normal},11),
-                    _ => error("{number format not implemented}").0.unwrap()
+                    _ => error("{number format not implemented yet}").0.unwrap() // TODO: add oct and hex number formats
                 }),vec![])
             },
             TranslatorVariant::Product { subs, start, sep, stop, labels, preci, preco, style } => {
@@ -390,9 +420,10 @@ impl Data {
                         val,
                         // take style from other field if specified and present
                         if *style>=0 {
-                            sub.get(*style as usize)?
-                                .1.0.as_ref()
-                                .map_or(WaveStyle::Normal,|r| r.1)
+                            sub.get(*style as usize).map_or(WaveStyle::Normal,|f|
+                                f.1.0.as_ref()
+                                     .map_or(WaveStyle::Normal,|r| r.1)
+                            )
                         } else {
                             WaveStyle::Normal
                         },
@@ -410,11 +441,16 @@ impl Data {
             },
             TranslatorVariant::Sum(translators) => {
                 let n = translators.len();
-                let bits = (usize::BITS - usize::leading_zeros(n)) as usize;
-                let variant = usize::from_str_radix(&value[..bits], 2).ok()?;
-                if variant>=n {return Some(error("{variant out of range}"));}
-                let t = &translators[variant];
-                self.translate_with(t,&value[bits..])
+                let bits = (usize::BITS - (n-1).leading_zeros()) as usize;
+                let variant = usize::from_str_radix(&value[..bits], 2);
+                match variant {
+                    Ok(variant) => {
+                        if variant>=n {return error("{variant out of range}");}
+                        let t = &translators[variant];
+                        self.translate_with(t,&value[bits..])
+                    }
+                    Err(_) => error("unknown"),
+                }
             },
             TranslatorVariant::Styled(s, t) => {
                 let translation = self.translate_with(t,value);
@@ -423,7 +459,7 @@ impl Data {
                     trans => trans,
                 }
             },
-        });
+        };
 
 
 
@@ -431,6 +467,10 @@ impl Data {
             Translation(Some((String::from(msg),WaveStyle::Error,11)),vec![])
         }
     }
+
+
+
+
 
     /// Get the type of a signal
     fn get_type(&self, signal: &String) -> Option<&String> {
@@ -466,6 +506,31 @@ impl Translation {
             },
         }
     }
+    /// Fill out a translation according to the provided Structure. Currently O(n^2).
+    fn fill(&mut self,structure: &Structure) -> () {
+        let ssub = &structure.0;
+
+        // recursively fill out provided subsignals
+        for (n,t) in &mut self.1 {
+            for (n2,s) in ssub {
+                if n==n2 {
+                    t.fill(&s);
+                    break;
+                }
+            }
+        }
+
+        // add missing subsignals
+        'outer: for (n,s) in ssub {
+            for (n2,_) in &self.1 {
+                if n==n2 {continue 'outer;}
+            }
+            self.1.push((n.clone(),Translation::from_struct(&s)))
+        }
+    }
+    fn from_struct(structure: &Structure) -> Self {
+        Translation(None,structure.0.iter().map(|(n,s)| (n.clone(),Translation::from_struct(s))).collect())
+    }
 }
 
 impl WaveStyle {
@@ -483,13 +548,18 @@ impl WaveStyle {
 impl Structure {
     /// Convert flattened Shockwaves `Structure` to Surfer `VariableInfo`
     fn convert(self) -> VariableInfo {
-        match self {
-            Structure::Structure(v) if v.len()==0 => VariableInfo::String,
-            Structure::Structure(v) => VariableInfo::Compound{
-                subfields: v.into_iter().map(|(name,st)| (name,st.convert())).collect()
-            },
-            Structure::Ref(_) => unreachable!(),
+        if self.0.len()==0 {
+            VariableInfo::String
+        } else {
+            VariableInfo::Compound{
+                subfields: self.0.into_iter().map(|(name,st)| (name,st.convert())).collect()
+            }
         }
+    }
+
+    /// Generate a structure from a translation
+    fn from_trans(trans:&Translation) -> Self {
+        Structure(trans.1.iter().map(|(n,t)| (n.clone(),Self::from_trans(t))).collect())
     }
 }
 
@@ -500,15 +570,22 @@ impl Structure {
 
 
 
-
+#[plugin_fn]
+pub fn new() -> FnResult<()> {
+    info!("SHOCKWAVES: new() - Hello!");
+    // info!("new() but info");
+    Ok(())
+}
 
 #[plugin_fn]
 pub fn name() -> FnResult<String> {
-    Ok("Shockwaves".to_string())
+    // error!("SHOCKWAVES: name()");
+    Ok("Shockwaves ".to_string()+datetime_str!())
 }
 
 #[plugin_fn]
 pub fn translates(variable: VariableMeta) -> FnResult<TranslationPreference> {
+    // error!("SHOCKWAVES: translates({variable:?})");
     let signal = signal_name(&variable);
     Ok(if STATE.lock().unwrap().can_translate(&signal) {
         TranslationPreference::Prefer
@@ -519,6 +596,7 @@ pub fn translates(variable: VariableMeta) -> FnResult<TranslationPreference> {
 
 #[plugin_fn]
 pub fn variable_info(variable: VariableMeta) -> FnResult<VariableInfo> {
+    // error!("SHOCKWAVES: variable_info({variable:?})");
     let signal = signal_name(&variable);
     Ok(STATE.lock().unwrap().structure(&signal))
 }
@@ -537,6 +615,9 @@ pub fn translate(
 
 #[plugin_fn]
 pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<()> {
+    info!("SHOCKWAVES: Loading source {wave_source:?}");
+    // return Ok(());
+
     if let Some(wave_source) = wave_source {
         let file = match wave_source {
             WaveSource::File(f) => Some(f),
@@ -547,38 +628,43 @@ pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<
         };
 
         if let Some(file) = file {
-            let metafile = Utf8PathBuf::from(file).set_extension("json").to_string();
+            let mut metafile = Utf8PathBuf::from(file);
+            metafile.set_extension("json");
+            let metafile = metafile.into_string();
+
+            info!("SHOCKWAVES: metafile {metafile}");
             if let Ok(true) = unsafe{file_exists(metafile.clone())} {
                 let bytes = unsafe{read_file(metafile.clone())};
+                // info!("SHOCKWAVES: metadata is {bytes:?}");
                 match bytes {
                     Ok(bytes) => {
                         match serde_json::from_slice(&bytes) {
                             Ok(data) => {
-                                extism_pdk::error!("Parsed Shockwaves metadata file");
+                                info!("SHOCKWAVES: Parsed Shockwaves metadata file");
                                 *STATE.lock().unwrap() = data;
                             }
                             Err(e) => {
-                                extism_pdk::error!("Could not parse Shockwaves metadata file: {e}");
+                                error!("SHOCKWAVES: Could not parse Shockwaves metadata file: {e}");
                                 *STATE.lock().unwrap() = Data::new();
                             }
                         }
                     }
                     Err(e) => {
-                        extism_pdk::error!("Could not read Shockwaves metadata file: {e}");
+                        error!("SHOCKWAVES: Could not read Shockwaves metadata file: {e}");
                         *STATE.lock().unwrap() = Data::new();
                     }
                 }
             } else {
-                extism_pdk::warn!("Could not find Shockwaves metadata file ({metafile})");
+                warn!("SHOCKWAVES: Could not find Shockwaves metadata file ({metafile})");
                 *STATE.lock().unwrap() = Data::new();
             }
 
         } else {
             *STATE.lock().unwrap() = Data::new();
-            extism_pdk::info!("Not loading Shockwaves translator for non-files");
+            info!("SHOCKWAVES: Not loading Shockwaves translator for non-files");
         }
     } else {
-        extism_pdk::info!("No waveform source");
+        info!("SHOCKWAVES: No waveform source");
         *STATE.lock().unwrap() = Data::new();
     }
     Ok(())
