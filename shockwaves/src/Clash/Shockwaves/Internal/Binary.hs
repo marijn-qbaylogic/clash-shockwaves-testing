@@ -2,9 +2,6 @@
 
 Turn packable types into binary string representations.
 
-@
-binPack (7::Unsigned 4) // produces "0111"
-@
 -}
 
 
@@ -12,7 +9,7 @@ binPack (7::Unsigned 4) // produces "0111"
 {-# LANGUAGE UndecidableInstances #-}
 
 
-module Clash.Shockwaves.Internal.Binary (binPack) where
+module Clash.Shockwaves.Internal.Binary where
 
 import Clash.Prelude
 import           Clash.Sized.Internal.BitVector
@@ -22,6 +19,12 @@ import Clash.Shockwaves.Internal.Types
 -- | Helper class to deal with arbitrary pack vector sizes.
 class BitPack a => BinaryPack a where
   -- | Represent a packable type as a string of `1`s, `0`s and `x`s
+  -- 
+  -- Example:
+  -- 
+  -- @
+  -- binPack (7::Unsigned 4) -- produces "0111"
+  -- @
   binPack :: a -> BinRep
 
 instance BitPack a => BinaryPack a where

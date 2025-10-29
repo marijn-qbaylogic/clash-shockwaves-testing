@@ -53,13 +53,6 @@ applyPrecL :: Prec -> [(a, Translation)] -> [(a, Translation)]
 applyPrecL p = L.map (\(a,b) -> (a,applyPrec p b))
 
 
--- | Join a list of values with a separator. If the list is empty, an empty
--- value is returned.
-joinWith :: Value -> [Value] -> Value
-joinWith s (x:y:r) = x <> s <> joinWith s (y:r)
-joinWith _ [x] = x
-joinWith _ [] = ""
-
 -- | Get the value of a 'Translation'. If the value is not defined,
 -- return @{value missing}@.
 getVal :: Translation -> Value
@@ -74,13 +67,13 @@ filterSignals = L.filter ((/="") . fst)
 
 
 
--- | Like 'translateFromSubs', but includes an error catching mechanism.
-safeTranslateFromSubs :: Translator -> [(SubSignal,Translation)] -> Translation
-safeTranslateFromSubs t subs = case safeVal subs of
-  Right subs' -> case safeVal (translateFromSubs t subs') of
-    Right t' -> t'
-    Left _e -> Translation (renError "{translation error}") $ filterSignals subs
-  Left _e -> transError "{undefined}"
+-- -- | Like 'translateFromSubs', but includes an error catching mechanism.
+-- safeTranslateFromSubs :: Translator -> [(SubSignal,Translation)] -> Translation
+-- safeTranslateFromSubs t subs = case safeVal subs of
+--   Right subs' -> case safeVal (translateFromSubs t subs') of
+--     Right t' -> t'
+--     Left _e -> Translation (renError "{translation error}") $ filterSignals subs
+--   Left _e -> transError "{undefined}"
 
 -- | Complete a translation based on already translated subsignals.
 --

@@ -43,6 +43,13 @@ safeName n = if isAlpha $ L.head n then n else parenthesize n
 insertIfMissing :: (Ord k) => k -> v -> Map k v -> Map k v
 insertIfMissing k v m = if member k m then m else M.insert k v m
 
+-- | Join a list of values with a separator. If the list is empty, an empty
+-- value is returned.
+joinWith :: Value -> [Value] -> Value
+joinWith s (x:y:r) = x <> s <> joinWith s (y:r)
+joinWith _ [x] = x
+joinWith _ [] = ""
+
 -- | Obtain the name of a type from a proxy value.
 -- The name consists of a unique fingerprint (which is safe to use)
 -- and a human readable representation of the type (which may not be unique
@@ -66,3 +73,12 @@ safeVal x = unsafeDupablePerformIO $ catch
             (\(e::SomeException) ->
               return $ Left (Just $ show $ toException e)))
   (\(XException e) -> return $ Left (Just e))
+
+-- | Evaluate to WHNF. If this fails, return the default value.
+safeWHNFOr :: a -> a -> a
+safeWHNFOr dflt x = unsafeDupablePerformIO $ catch
+  (   evaluate . unsafeDupablePerformIO
+    $ catch (evaluate x)
+            (\(_::SomeException) ->
+              return dflt))
+  (\(XException _e) -> return dflt)

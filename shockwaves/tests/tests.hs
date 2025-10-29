@@ -152,6 +152,8 @@ renderT = testGroup "RENDERED STRING IS CORRECT"
                                 ["True :> False :> Nil","undefined :> undefined :> Nil","True :> undefined :> Nil","undefined :> undefined :> Nil"]
   , testGroup "Vec 0" $ renders [ Nil @Bool, undef]
                                 ["Nil"     ,"Nil" ]
+  , testGroup "Maybe L" $ renders [ Just (La False False)  ,  Just undef     , undef     ]
+                                  ["Just (False <A> False)", "Just undefined","undefined"]
   ]
 
 
@@ -206,10 +208,16 @@ translationT = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
                              [\(T _ [])->0, \(T _ ["Just.0":@ _])->0, \(T _ [])->0]
   , testGroup "Vec 2" $ pats [ True :> False :> Nil      , undef :> undef :> Nil      , True :> undef              , undef                      ]
                              [\(T _ ["0":@ _,"1":@ _])->0, \(T _ ["0":@ _,"1":@ _])->0, \(T _ ["0":@ _,"1":@ _])->0, \(T _ ["0":@ _,"1":@ _])->0]
+--   , testCase "debug Maybe L" $ assertFailure . show $ translator @(Maybe L)
+--   , testCase "debug L" $ assertFailure . show $ translator @L
+--   , testCase "debug L" $ assertFailure . show $ translate (La True False)
+--   , testCase "debug L" $ assertFailure . show $ precL (La True False)
   ]
 
 lutT :: TestTree
 lutT = testGroup "LUT VALUES ARE STORED"
   [ testCase "True <A> True" $ addValue (La True True) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
   , testCase "Just (True <A> True)" $ addValue (Just $ La True True) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
+  , testCase "Just (undefined @L)" $ addValue (Just $ undef @L) M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L)])]
+  , testCase "undefined @(Maybe L)" $ addValue (undef @(Maybe L)) M.empty @?= M.empty
   ]

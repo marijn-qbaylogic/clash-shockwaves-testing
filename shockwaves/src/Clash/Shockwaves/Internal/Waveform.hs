@@ -239,7 +239,7 @@ instance (WaveformG (C1 m2 s k), WaveformG (s k)) => WaveformG (D1 m1 (C1 m2 s) 
   splitG _ = translateAllG . unM1
 
   addTypesG = addTypesG @(C1 m2 s k)
-  addValueG M1{unM1=x} = addValueG @(C1 m2 s k) x
+  addValueG x = addValueG @(C1 m2 s k) (unM1 x)
   hasLUTG = hasLUTG @(C1 m2 s k)
 
   widthG = undefined
@@ -256,10 +256,15 @@ instance WaveformG ((a :+: b) k) => WaveformG (D1 m1 (a :+: b) k) where
   splitG r = splitG r . unM1
 
   addTypesG = addTypesG @((a :+: b) k)
-  addValueG M1{unM1=x} = addValueG x
+  addValueG x = addValueG (unM1 x)
   hasLUTG = hasLUTG @((a :+: b) k)
 
   widthG = undefined
+
+
+leftright :: (a :+: b) k -> Either (a k) (b k)
+leftright (L1 x) = Left x
+leftright (R1 y) = Right y
 
 -- multiple constructors
 instance (WaveformG (a k), WaveformG (b k)) => WaveformG ((a :+: b) k) where
@@ -280,8 +285,11 @@ instance (WaveformG (a k), WaveformG (b k)) => WaveformG ((a :+: b) k) where
   splitG r (R1 y) = splitG r y
 
   addTypesG = addTypesG @(a k) . addTypesG @(b k)
-  addValueG (L1 x) = addValueG x
-  addValueG (R1 y) = addValueG y
+--   addValueG (L1 x) = addValueG x
+--   addValueG (R1 y) = addValueG y
+  addValueG xy = safeWHNFOr id $ case leftright xy of
+    Left  x -> addValueG x
+    Right y -> addValueG y
   hasLUTG = hasLUTG @(a k) || hasLUTG @(b k)
 
   widthG = undefined
@@ -322,7 +330,7 @@ instance (WaveformG (fields k), KnownSymbol name)
   splitG r x = [(sym @name, Translation r $ translateAllG $ unM1 x)]
 
   addTypesG = addTypesG @(fields k)
-  addValueG M1{unM1=x} = addValueG x
+  addValueG x = addValueG (unM1 x)
   hasLUTG = hasLUTG @(fields k)
 
   widthG = undefined
@@ -336,7 +344,7 @@ enumLabel = L.zipWith (\i (_,t) -> (show i,t)) [(0::Integer)..]
 -- applicative product
 instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
   => WaveformG (C1 (MetaCons name fix False) fields k) where
-  translateG sty x = safeTranslateFromSubs
+  translateG sty x = translateFromSubs --safe?
     (translatorG @(C1 (MetaCons name fix False) fields k) undefined sty)
     (enumLabel $ translateAllG $ unM1 x)
   translateAsSumG sty x = Translation ren [(sym @name, t)]
@@ -385,7 +393,7 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
   splitG r x = [(sym @name, Translation r $ enumLabel $ translateAllG $ unM1 x)]
 
   addTypesG = addTypesG @(fields k)
-  addValueG M1{unM1=x} = addValueG x
+  addValueG x = addValueG (unM1 x)
   hasLUTG = hasLUTG @(fields k)
 
   widthG = undefined
@@ -428,7 +436,7 @@ instance (WaveformG (a k), WaveformG (b k)) => WaveformG ((a :*: b) k) where
   splitG = undefined
 
   addTypesG = addTypesG @(a k) . addTypesG @(b k)
-  addValueG (x :*: y) = addValueG x . addValueG y
+  addValueG xy = addValueG (left xy) . addValueG (right xy)
   hasLUTG = hasLUTG @(a k) || hasLUTG @(b k)
 
   widthG = widthG @(a k) + widthG @(b k)
@@ -450,7 +458,7 @@ instance (Waveform t, KnownSymbol name)
   splitG = undefined
 
   addTypesG = addTypes @t
-  addValueG M1{unM1=K1{unK1=x}} = addValue x
+  addValueG x = addValue $ unK1 . unM1 $ x
   hasLUTG = hasLUT @t
 
   widthG = width @t
@@ -460,7 +468,7 @@ instance (Waveform t, KnownSymbol name)
 instance (Waveform t) => WaveformG (S1 (MetaSel Nothing p q r) (Rec0 t) k) where
   translateG = undefined
   translateAsSumG = undefined
-  translateAllG M1{unM1=K1{unK1=x}} = [("", translate x)]
+  translateAllG x = [("", translate $ unK1 . unM1 $ x)]
 
   translatorG = undefined
   translatorsG _ = [("", ref (Proxy @t))]
@@ -468,7 +476,7 @@ instance (Waveform t) => WaveformG (S1 (MetaSel Nothing p q r) (Rec0 t) k) where
   splitG = undefined
 
   addTypesG = addTypes @t
-  addValueG M1{unM1=K1{unK1=x}} = addValue x
+  addValueG x = addValue $ unK1 . unM1 $ x
   hasLUTG = hasLUT @t
 
   widthG = width @t
@@ -598,11 +606,12 @@ instance (PrecG (a k), PrecG (b k)) => PrecG ((a :+: b) k) where
 
 -- struct
 instance (PrecG (fields k), PrecF fix)
-  => PrecG (C1 (MetaCons name fix False) fields k) where
+  => PrecG (C1 (MetaCons name fix True) fields k) where
   precG _ = 11
 
+-- applicative
 instance (PrecG (fields k), PrecF fix)
-  => PrecG (C1 (MetaCons name fix True) fields k) where
+  => PrecG (C1 (MetaCons name fix False) fields k) where
   precG _ = if nFields @(fields k) == 0 then 11 else precF @fix
 
 
@@ -787,7 +796,7 @@ instance (Waveform a) => Waveform (Maybe a) where
       }
     ]
   translate' Nothing = Translation (Just ("Nothing","grey",11)) []
-  translate' (Just x) = safeTranslateFromSubs t [("Just.0",translate x)]
+  translate' (Just x) = translateFromSubs t [("Just.0",translate x)] --safe?
     where
       t = case translator @(Maybe a) of
         Translator _ (TSum [_,t']) -> t'
@@ -1007,7 +1016,7 @@ instance (Waveform a) => WaveformRTree True 0 a where
       _ -> undefined
     else id
   addSubtypesRTree = addTypes @a
-  translateRTree t = safeTranslateFromSubs (translator @(RTree 0 a)) subs
+  translateRTree t = translateFromSubs (translator @(RTree 0 a)) subs --safe?
     where
       subs = case t of
         RLeaf x -> [("0",translate x)]
