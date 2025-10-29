@@ -25,17 +25,23 @@ import Data.Colour.Names (readColourName)
 import Data.Maybe (fromJust)
 
 -- some type aliases for clarity
-type TypeName = String -- ^ Name of a type.
-type SubSignal = String -- ^ Name of a subsignal.
-type SignalName = SubSignal -- ^ Name of a signal.
-type Value = String -- ^ Text displayed as the value of a signal.
-type Prec = Integer -- ^ Operator precedence of the value.
+type TypeName = String
+-- ^ Name of a type.
+type SubSignal = String
+-- ^ Name of a subsignal.
+type SignalName = SubSignal
+-- ^ Name of a signal.
+type Value = String
+-- ^ Text displayed as the value of a signal.
+type Prec = Integer
+-- ^ Operator precedence of the value.
 type Render = Maybe (Value, WaveStyle, Prec)
 -- ^ Rendered value. This can be @Nothing@ is the value does not exists,
 -- or a tuple of the text representation, style, and precedence.
 type BinRep = String
 -- ^ Binary representation of a haskell value (like 'BitVector', but arbitrarily sized).
-type LUTName = TypeName -- ^ Reference to a LUT.
+type LUTName = TypeName
+-- ^ Reference to a LUT.
 
 
 -- | Map that links signal names to their types.
@@ -47,9 +53,10 @@ type LUTMap = Map LUTName LUT
 -- | A lookup table of 'Translation's.
 type LUT = Map BinRep Translation
 
-type Color = RGB Word8 -- ^ The color type used in 'WaveStyle'.
+type Color = RGB Word8
+-- ^ The color type used in 'WaveStyle'.
 
--- | Translation of a value.BinRep
+-- | Translation of a value.
 -- The translation consists of a 'Render' value (the representation of the value itself)
 -- and a list of subsignal translations.
 data Translation
@@ -73,7 +80,7 @@ data NumberFormat
   | NFUns -- ^ An unsigned decimal value.
   | NFHex -- ^ A hexadecimal value. TODO: Supports partially undefined values.
   | NFOct -- ^ An octal value. TODO: Supports partially undefined values.
-  | NFBin -- ^ A binary value. TODO: Supports partially undefined values.
+  | NFBin -- ^ A binary value.
   deriving (Show, Typeable, Generic, NFData)
 
 -- | A structure value that shows what subsignals are present.
@@ -87,15 +94,37 @@ data Translator = Translator Int TranslatorVariant deriving (Show)
 
 -- | The translation algorithm used.
 data TranslatorVariant
-  = TRef TypeName Structure
-  -- ^ Use the translator of a different type. Note that the width value of the
+  -- | Use the translator of a different type. Note that the width value of the
   -- 'Translator's should still match. The structure is only used so that the
   -- structure can be reconstructed from the translator alone, and is not
   -- actually stored in the final output.
+  = TRef TypeName Structure
+
+  -- | A reference to a lookup table.
+  | TLut LUTName Structure
+  
   | TSum [Translator]
   -- ^ Select one translator to be used based on the first bits of the binary
   -- representation. Translate using the selected translator. Keep in mind that
   -- problems may occur if subsignal names are shared.
+  
+  -- | Split the binary data into separate fields, translate each of these,
+  -- and join together the values.
+  --
+  -- Example:
+  --
+  -- @
+  -- data T = T{a::Bool,b::Bool}
+  -- translatorVariantT = TProduct
+  --   { subs = [("a",Bool,"b",Bool)],
+  --   , start = "T{"
+  --   , sep = ","
+  --   , stop = "}"
+  --   , labels = ["a=","b="]
+  --   , preci = 0
+  --   , preco = 11
+  --   }
+  -- @
   | TProduct
     { subs          :: [(Maybe SubSignal, Translator)] -- ^ List of fields to translate.
     , start        :: Value -- ^ Text to insert at the start of the value.
@@ -112,29 +141,9 @@ data TranslatorVariant
     -- If no style is present in this field, or style is set to -1,
     -- use the default style instead.
     }
-  -- ^ Split the binary data into separate fields, translate each of these,
-  -- and join together the values.
-  --
-  -- Example:
-  -- @
-  -- data T = T{a::Bool,b::Bool}
-  -- translatorVariantT = TProduct
-  --   { subs = [("a",Bool,"b",Bool)],
-  --   , start = "T{"
-  --   , sep = ","
-  --   , stop = "}"
-  --   , labels = ["a=","b="]
-  --   , preci = 0
-  --   , preco = 11
-  --   }
-  -- @
-  | TConst Translation -- ^ A constant translation value. The binary value
-  -- provided is completely ignored, even if not properly defined.
-  | TLut LUTName Structure -- ^ A reference to a lookup table.
-  | TNumber
-    { format :: NumberFormat -- ^ Format used to display data.
-    }
-  -- ^ A numerical value.
+  
+  -- | An array value. This behaves much like 'TProduct', except that no labels
+  -- are provided, and all fields use the same translator.
   | TArray
     { sub    :: Translator -- ^ Translator used for all values.
     , len    :: Int -- ^ Length of the array.
@@ -144,14 +153,24 @@ data TranslatorVariant
     , preci  :: Prec -- ^ Inner precedence: used on subvalues.
     , preco  :: Prec -- ^ Outer precedence: used for the combined value.
     }
-  -- ^ An array value. This behaves much like 'TProduct', except that no labels
-  -- are provided, and all fields use the same translator.
-  | TStyled WaveStyle Translator
-  -- ^ Apply a style to a translation.
-  -- Does not change the structure.
-  | TDuplicate SubSignal Translator
-  -- ^ Translate a value only if the first bit of the binary representation is
+  
+  -- | Translate a value only if the first bit of the binary representation is
   -- @1@. If it is @0@, display nothing.
+  | TDuplicate SubSignal Translator
+  
+  -- | Apply a style to a translation.
+  -- Does not change the structure.
+  | TStyled WaveStyle Translator
+  
+  -- | A numerical value.
+  | TNumber
+    { format :: NumberFormat -- ^ Format used to display data.
+    }
+
+  -- | A constant translation value. The binary value
+  -- provided is completely ignored, even if not properly defined.
+  | TConst Translation
+
   deriving (Show)
 
 

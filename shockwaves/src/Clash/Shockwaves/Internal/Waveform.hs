@@ -45,6 +45,15 @@ wrapStyle :: WaveStyle -> Translator -> Translator
 wrapStyle WSNormal t = t
 wrapStyle s (Translator w v) = Translator w $ TStyled s (Translator w v)
 
+-- | Wrap a 'Translator' in a 'TDuplicate' variant translator with the
+-- provided subsignal name.
+dup :: SubSignal -> Translator -> Translator
+dup name (Translator w t) = Translator w $ TDuplicate name (Translator w t)
+
+-- | Generate a translator reference for a type.
+ref :: Waveform a => Proxy a -> Translator
+ref (_::Proxy a) = Translator (width @a) $ TRef (typeName @a) (structure $ translator @a)
+
 
 -- | Create an error value from an optional error message.
 errMsg :: Maybe Value -> Value
@@ -262,9 +271,9 @@ instance WaveformG ((a :+: b) k) => WaveformG (D1 m1 (a :+: b) k) where
   widthG = undefined
 
 
-leftright :: (a :+: b) k -> Either (a k) (b k)
-leftright (L1 x) = Left x
-leftright (R1 y) = Right y
+-- leftright :: (a :+: b) k -> Either (a k) (b k)
+-- leftright (L1 x) = Left x
+-- leftright (R1 y) = Right y
 
 -- multiple constructors
 instance (WaveformG (a k), WaveformG (b k)) => WaveformG ((a :+: b) k) where
@@ -285,18 +294,12 @@ instance (WaveformG (a k), WaveformG (b k)) => WaveformG ((a :+: b) k) where
   splitG r (R1 y) = splitG r y
 
   addTypesG = addTypesG @(a k) . addTypesG @(b k)
---   addValueG (L1 x) = addValueG x
---   addValueG (R1 y) = addValueG y
-  addValueG xy = safeWHNFOr id $ case leftright xy of
-    Left  x -> addValueG x
-    Right y -> addValueG y
+  addValueG xy = safeWHNFOr id $ case xy of
+    (L1 x) -> addValueG x
+    (R1 y) -> addValueG y
   hasLUTG = hasLUTG @(a k) || hasLUTG @(b k)
 
   widthG = undefined
-
-
-dup :: SubSignal -> Translator -> Translator
-dup name (Translator w t) = Translator w $ TDuplicate name (Translator w t)
 
 -- struct constructor
 instance (WaveformG (fields k), KnownSymbol name)
@@ -336,7 +339,7 @@ instance (WaveformG (fields k), KnownSymbol name)
   widthG = undefined
 
 
--- -- | Replace empty labels with numbers
+-- | Replace empty labels with numbers
 enumLabel :: [(SubSignal,a)] -> [(SubSignal,a)]
 enumLabel = L.zipWith (\i (_,t) -> (show i,t)) [(0::Integer)..]
 
@@ -418,9 +421,11 @@ instance WaveformG (U1 k) where
   widthG = 0
 
 
+-- | Lazily get left field.
 left :: (a :*: b) k -> a k
 left (x :*: _y) = x
 
+-- | Lazily get right field.
 right :: (a :*: b) k -> b k
 right (_x :*: y) = y
 
@@ -440,10 +445,6 @@ instance (WaveformG (a k), WaveformG (b k)) => WaveformG ((a :*: b) k) where
   hasLUTG = hasLUTG @(a k) || hasLUTG @(b k)
 
   widthG = widthG @(a k) + widthG @(b k)
-
--- | Generate a translator reference for a type
-ref :: Waveform a => Proxy a -> Translator
-ref (_::Proxy a) = Translator (width @a) $ TRef (typeName @a) (structure $ translator @a)
 
 -- struct field
 instance (Waveform t, KnownSymbol name)
@@ -587,7 +588,10 @@ instance (WaveformLUT a, BitPack a, Typeable a)
 -- | Helper class for determining the precedence and number of fields of a
 -- value's constructor.
 class (Generic a) => PrecG a where
+  -- | Operator precedence of a value.
   precG :: a -> Prec
+
+  -- | Return the number of fields of a constructor.
   nFields :: Integer
   nFields = undefined
 
@@ -629,8 +633,10 @@ instance PrecG (S1 (MetaSel n p q r) t k) where
   nFields = 1
 
 
+-- | Class for obtaining the runtime precedence of a typelevel fixity value.
 class PrecF (f::FixityI) where
-  precF :: Integer
+  -- | Return the precedence of a fixity value as an 'Integer'.
+  precF :: Prec
 instance PrecF PrefixI where
   precF = 10
 instance (KnownNat p) => PrecF (InfixI a p) where
@@ -645,7 +651,15 @@ instance (KnownNat p) => PrecF (InfixI a p) where
 -- | Helper class for defining a constant translation value. To use this,
 -- derive Waveform via WaveformForConst.
 class (BitPack a, Typeable a) => WaveformConst a where
-  constTrans :: Render
+  -- | The constant translation value.
+  constTrans :: Translation
+  constTrans = Translation (constRen @a) []
+  -- | Constant render value. Overwrite this if the constant value has no
+  -- subsignals.
+  constRen :: Render
+  constRen = undefined
+  {-# MINIMAL constTrans | constRen #-}
+
 
 -- | Helper class for deriving 'Waveform' for types implementing 'WaveformConst'.
 newtype WaveformForConst a = WfConst a deriving (Generic,BitPack,Typeable)
@@ -653,8 +667,8 @@ newtype WaveformForConst a = WfConst a deriving (Generic,BitPack,Typeable)
 instance (WaveformConst a, BitPack a, Typeable a)
   => Waveform (WaveformForConst a) where
   typeName = typeNameP (Proxy @a)
-  translator = Translator 0 $ TConst $ Translation (constTrans @a) []
-  translate' _ = Translation (constTrans @a) []
+  translator = Translator 0 $ TConst $ constTrans @a
+  translate' _ = constTrans @a
   addSubtypes = id
   addValue _ = id
   hasLUT = False
@@ -777,7 +791,7 @@ instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a
 -- INSTANCES FOR OTHER STANDARD HASKELL TYPES
 
 instance WaveformConst () where
-  constTrans = Just ("()",WSNormal,11)
+  constRen = Just ("()",WSNormal,11)
 
 instance Waveform Bool
 
@@ -965,12 +979,14 @@ deriving via WaveformForLUT (Fixed r i f)
 
 -- snat
 instance (KnownNat n, BitPack (SNat n)) => WaveformConst (SNat n) where
-  constTrans = Just (show $ natVal $ Proxy @n, WSNormal, 11)
+  constRen = Just (show $ natVal $ Proxy @n, WSNormal, 11)
 deriving via WaveformForConst (SNat n)
   instance (KnownNat n, BitPack (SNat n)) => Waveform (SNat n)
 
 
 -- the monster that is RTree :/
+
+-- | Helper family for implementing 'Waveform' for 'RTree'.
 type family RTreeIsLeaf d where
   RTreeIsLeaf 0 = True
   RTreeIsLeaf d = False
@@ -1005,6 +1021,7 @@ instance (Waveform a, KnownNat d, WaveformRTree (RTreeIsLeaf d) d a)
   addValue = addValueRTree @(RTreeIsLeaf d) @d @a
   hasLUT = hasLUT @a
 
+-- | Helper class for implementing 'Waveform' for 'RTree'.
 class WaveformRTree (isLeaf::Bool) d a where
   addValueRTree :: RTree d a -> LUTMap -> LUTMap
   addSubtypesRTree :: TypeMap -> TypeMap

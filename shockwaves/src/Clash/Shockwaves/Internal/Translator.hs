@@ -141,15 +141,14 @@ translateFromSubs (Translator _ translator) subs = case translator of
     where t' = translateFromSubs t subs
           Translation ren _ = t'
 
-getS :: Structure -> [(SubSignal,Structure)]
-getS (Structure s) = s
-
--- | Return the structure of a 'Translator'.
+-- | Return the 'Structure' implied by a 'Translator'. Useful for determining
+-- the structure of a constant translation.
 structure :: Translator -> Structure
 structure (Translator _ t) = case t of
   TRef _ s -> s
   TSum ts -> Structure subs
     where subs = L.concatMap (getS . structure) ts
+          getS (Structure s) = s
   TProduct{subs} -> Structure (mapMaybe go subs)
     where go (Nothing,_) = Nothing
           go (Just n, t') = Just (n, structure t')

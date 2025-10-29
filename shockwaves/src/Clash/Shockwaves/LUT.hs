@@ -13,7 +13,7 @@ module Clash.Shockwaves.LUT (
   Value,
   WaveStyle(..),
   Prec,
-  Structure,
+  Structure(..),
   SubSignal,
   structure
 ) where

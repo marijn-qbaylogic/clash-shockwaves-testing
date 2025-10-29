@@ -2,7 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-|
-Some small helper functions
+Some small helper functions.
 -}
 
 
@@ -27,7 +27,7 @@ parenthesize :: Value -> Value
 parenthesize n = "("<>n<>")"
 
 
--- | Returns the 'BitSize' of a type as a runtime 'Integer'.
+-- | Returns the 'BitSize' of a type as a runtime 'Int'.
 bitsize :: (BitPack a) => Proxy a -> Int
 bitsize (_ :: Proxy a) = fromInteger $ natVal $ Proxy @(BitSize a)
 
@@ -58,6 +58,7 @@ typeNameP :: Typeable a => Proxy a -> TypeName
 typeNameP p = show (typeRepFingerprint r) <> ":" <> show r
   where r = typeRep p
 
+-- | Class for improving runtime symbol syntax readability.
 class (KnownSymbol s) => QuickSymbol s where
   -- | Shorter way of obtaining the runtime value of a type level string.
   sym :: String
@@ -74,7 +75,7 @@ safeVal x = unsafeDupablePerformIO $ catch
               return $ Left (Just $ show $ toException e)))
   (\(XException e) -> return $ Left (Just e))
 
--- | Evaluate to WHNF. If this fails, return the default value.
+-- | Evaluate to WHNF. If this fails, return a default value.
 safeWHNFOr :: a -> a -> a
 safeWHNFOr dflt x = unsafeDupablePerformIO $ catch
   (   evaluate . unsafeDupablePerformIO
