@@ -30,6 +30,7 @@ type VariableMeta = VMeta<(),()>;
 type SigMap = HashMap<String,String>;
 type TypeMap = HashMap<String,Translator>;
 type LUTMap = HashMap<String,LUT>;
+type StructureMap = HashMap<String,Structure>; 
 
 type LUT = HashMap<String,Translation>;
 
@@ -38,6 +39,8 @@ struct Data {
     signals: SigMap,
     types:   TypeMap,
     luts:    LUTMap,
+    #[serde(default)]
+    structures: StructureMap,
 }
 
 #[derive(Serialize,Deserialize,Debug,Clone)]
@@ -197,16 +200,27 @@ impl Data {
             signals: HashMap::new(),
             types: HashMap::new(),
             luts: HashMap::new(),
+            structures: HashMap::new(),
         }
     }
 
     /// Determine the full structure of a signal.
-    fn structure(&self, signal: &String) -> VariableInfo {
+    fn structure(&mut self, signal: &String) -> VariableInfo {
         // lookup signal type
         let ty = self.get_type(signal).unwrap();
 
-        // create flattened structure for type
-        let st = self.type_structure(ty);
+        // try to return structure from cache
+        if let Some(st) = self.structures.get(ty) {
+            return st.convert();
+        }
+
+        // lookup type translator
+        let trans = self.get_translator(ty);
+        let st = self.trans_structure(trans);
+        let ty = ty.clone();
+
+        // create non-flattened structure for type
+        let st = self.structures.entry(ty).or_insert(st);
 
         // convert to VariableInfo
         st.convert()
@@ -254,16 +268,24 @@ impl Data {
     }
 
     /// Translate a value.
-    fn translate(&self, signal: &String, value: &str) -> TranslationResult {
+    fn translate(&mut self, signal: &String, value: &str) -> TranslationResult {
         // lookup signal type
-        let ty = self.get_type(signal).unwrap();
+        let ty = self.get_type(signal).unwrap().clone();
 
         // lookup type translator
-        let translator = self.get_translator(ty);
-        let structure = self.type_structure(ty);
+        let structure = if let Some(st) = self.structures.get(&ty) {
+            st
+        } else {
+            self.structures.insert(ty.clone(),self.type_structure(&ty));
+            self.structures.get(&ty).unwrap()
+        };
+        let translator = self.get_translator(&ty);
         
         // translate value with translator
         let mut translation = self.translate_with(translator,value);
+
+        //propagate errors
+        translation.prop_errors();
 
         //fill out missing unknown fields
         translation.fill(&structure);
@@ -528,8 +550,23 @@ impl Translation {
             self.1.push((n.clone(),Translation::from_struct(&s)))
         }
     }
+    /// Create an empty translation from a structure
     fn from_struct(structure: &Structure) -> Self {
         Translation(None,structure.0.iter().map(|(n,s)| (n.clone(),Translation::from_struct(s))).collect())
+    }
+    /// Propagate error style upwards
+    fn prop_errors(&mut self) -> bool {
+        if self.1.iter_mut().map(|(_n,t)| t.prop_errors()).fold(false,|a,b| a||b) {
+            match &mut self.0 {
+                Some((_,s,_)) => {*s=WaveStyle::Error;},
+                _ => {},
+            }
+            return true
+        }
+        match self.0 {
+            Some((_,WaveStyle::Error,_)) => true,
+            _ => false,
+        }
     }
 }
 
@@ -547,12 +584,12 @@ impl WaveStyle {
 
 impl Structure {
     /// Convert flattened Shockwaves `Structure` to Surfer `VariableInfo`
-    fn convert(self) -> VariableInfo {
+    fn convert(&self) -> VariableInfo {
         if self.0.len()==0 {
             VariableInfo::String
         } else {
             VariableInfo::Compound{
-                subfields: self.0.into_iter().map(|(name,st)| (name,st.convert())).collect()
+                subfields: self.0.iter().map(|(name,st)| (name.clone(),st.convert())).collect()
             }
         }
     }
