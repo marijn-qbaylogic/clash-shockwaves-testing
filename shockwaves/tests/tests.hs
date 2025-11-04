@@ -154,6 +154,8 @@ renderT = testGroup "RENDERED STRING IS CORRECT"
                                 ["Nil"     ,"Nil" ]
   , testGroup "Maybe L" $ renders [ Just (La False False)  ,  Just undef     , undef     ]
                                   ["Just (False <A> False)", "Just undefined","undefined"]
+  , testGroup "Signed 32" $ renders [ 0 ,  12345 ,   -123456789 :: Signed 32]
+                                    ["0","12_345","-123_456_789"            ]
   ]
 
 

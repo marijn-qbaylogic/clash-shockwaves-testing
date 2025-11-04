@@ -558,8 +558,8 @@ newtype WaveformForLUT a = WfLUT a deriving (Generic,BitPack,Typeable)
 instance (WaveformLUT a, BitPack a, Typeable a)
   => Waveform (WaveformForLUT a) where
   typeName = typeNameP (Proxy @a)
-  
-  translator = 
+
+  translator =
       Translator (width @(WaveformForLUT a))
     $ TLut (typeNameP (Proxy @a)) (structureL @a)
   translate' (WfLUT x) = translateL x
@@ -682,22 +682,26 @@ instance (WaveformConst a, BitPack a, Typeable a)
 -- @
 -- deriving via WaveformForNumber NFSig (Signed 3) instance Waveform (Signed 3)
 -- @
-newtype WaveformForNumber (f::NumberFormat) a
+newtype WaveformForNumber (f::NumberFormat) (s::Maybe NSPair) a
   = WfNum a
   deriving (Generic,BitPack,Typeable)
+
+type NSPair = (Nat,Symbol)
 
 instance (
     BitPack a
   , Typeable a
   , Typeable f
+  , Typeable s
   , KnownNFormat f
+  , KnownNSpacer s
   , Integral a
-  ) => Waveform (WaveformForNumber (f::NumberFormat) a) where
+  ) => Waveform (WaveformForNumber (f::NumberFormat) (s::Maybe NSPair) a) where
   typeName = typeNameP (Proxy @a)
   translator =
-      Translator (width @(WaveformForNumber f a))
-    $ TNumber{format = formatVal (Proxy @f)}
-  translate' (WfNum x) = Translation (Just (v,WSNormal,11)) []
+      Translator (width @(WaveformForNumber f s a))
+    $ TNumber{format = formatVal (Proxy @f), spacer = spacerVal (Proxy @s)}
+  translate' (WfNum x) = Translation (Just (v',WSNormal,11)) []
     where
       v = (case formatVal $ Proxy @f of
             NFSig -> const $ show $ toInteger x
@@ -705,17 +709,11 @@ instance (
             NFHex -> showHex x
             NFOct -> showOct x
             NFBin -> showBin x) ""
+      v' = applySpacer (spacerVal (Proxy @s)) v
   addSubtypes = id
   addValue _ = id
   hasLUT = False
 
--- -- | Class for turning a type level 'Bool' into a runtime value.
--- class KnownBool (b::Bool) where
---   boolVal :: forall proxy. proxy b -> Bool
--- instance KnownBool True where
---   boolVal _ = True
--- instance KnownBool False where
---   boolVal _ = False
 
 -- | Class for turning a type level 'NumberFormat' into a runtime value.
 class KnownNFormat (f::NumberFormat) where
@@ -730,6 +728,15 @@ instance KnownNFormat NFOct where
   formatVal _ = NFOct
 instance KnownNFormat NFBin where
   formatVal _ = NFBin
+
+
+class KnownNSpacer (f :: Maybe NSPair) where
+  spacerVal :: proxy f -> Maybe (Integer, String)
+instance KnownNSpacer 'Nothing where
+  spacerVal _ = Nothing
+instance (KnownNat n, KnownSymbol s) => KnownNSpacer ('Just '(n, s)) where
+  spacerVal _ = Just (natVal (Proxy @n), sym @s)
+
 
 --------------------------------------- IMPLEMENTATIONS ----------------------------------
 
@@ -843,19 +850,25 @@ instance WaveformLUT Float where
   precL _ = 11
 deriving via WaveformForLUT Float instance Waveform Float
 
-deriving via WaveformForNumber NFSig Int instance Waveform Int
-deriving via WaveformForNumber NFSig Int8 instance Waveform Int8
-deriving via WaveformForNumber NFSig Int16 instance Waveform Int16
-deriving via WaveformForNumber NFSig Int32 instance Waveform Int32
-deriving via WaveformForNumber NFSig Int64 instance Waveform Int64
+type DecSpacer = 'Just '(3,"_")
+type HexSpacer = 'Just '(4,"_")
+type OctSpacer = 'Just '(4,"_")
+type BinSpacer = 'Just '(4,"_")
+type NoSpacer = 'Nothing :: (Maybe NSPair)
+
+deriving via WaveformForNumber NFSig DecSpacer Int instance Waveform Int
+deriving via WaveformForNumber NFSig DecSpacer Int8 instance Waveform Int8
+deriving via WaveformForNumber NFSig DecSpacer Int16 instance Waveform Int16
+deriving via WaveformForNumber NFSig DecSpacer Int32 instance Waveform Int32
+deriving via WaveformForNumber NFSig DecSpacer Int64 instance Waveform Int64
 
 instance Waveform Ordering
 
-deriving via WaveformForNumber NFUns Word instance Waveform Word
-deriving via WaveformForNumber NFUns Word8 instance Waveform Word8
-deriving via WaveformForNumber NFUns Word16 instance Waveform Word16
-deriving via WaveformForNumber NFUns Word32 instance Waveform Word32
-deriving via WaveformForNumber NFUns Word64 instance Waveform Word64
+deriving via WaveformForNumber NFUns DecSpacer Word instance Waveform Word
+deriving via WaveformForNumber NFUns DecSpacer Word8 instance Waveform Word8
+deriving via WaveformForNumber NFUns DecSpacer Word16 instance Waveform Word16
+deriving via WaveformForNumber NFUns DecSpacer Word32 instance Waveform Word32
+deriving via WaveformForNumber NFUns DecSpacer Word64 instance Waveform Word64
 
 -- instance Display CUShort where
 -- deriving via NoSplit CUShort instance Split CUShort
@@ -863,11 +876,11 @@ deriving via WaveformForNumber NFUns Word64 instance Waveform Word64
 -- instance Display Half where
 -- deriving via NoSplit Half instance Split Half
 
-deriving via WaveformForNumber NFSig (Signed n)
+deriving via WaveformForNumber NFSig DecSpacer (Signed n)
   instance (KnownNat n) => Waveform (Signed n)
-deriving via WaveformForNumber NFUns (Unsigned n)
+deriving via WaveformForNumber NFUns DecSpacer (Unsigned n)
   instance (KnownNat n) =>  Waveform (Unsigned n)
-deriving via WaveformForNumber NFUns (Index n)
+deriving via WaveformForNumber NFUns DecSpacer (Index n)
   instance (1 <= n, KnownNat n) => Waveform (Index n)
 
 instance Waveform a => Waveform (Complex a)
@@ -964,7 +977,7 @@ instance (KnownNat n, Waveform a) => Waveform (Vec n a) where
   hasLUT = hasLUT @a
 
 
-deriving via WaveformForNumber NFBin (BitVector n)
+deriving via WaveformForNumber NFBin BinSpacer (BitVector n)
   instance (KnownNat n) => Waveform (BitVector n)
 
 -- fixed point

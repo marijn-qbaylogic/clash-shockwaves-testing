@@ -19,6 +19,7 @@ module Clash.Shockwaves.Waveform (
   NumberFormat(..),
   WaveformForConst(..),
   WaveformForNumber(..),
+  DecSpacer,HexSpacer,OctSpacer,BinSpacer,NoSpacer,
 ) where
 
 import Clash.Shockwaves.Internal.Types

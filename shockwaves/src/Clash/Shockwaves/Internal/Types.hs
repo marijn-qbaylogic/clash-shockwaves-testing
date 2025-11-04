@@ -83,6 +83,8 @@ data NumberFormat
   | NFBin -- ^ A binary value.
   deriving (Show, Typeable, Generic, NFData)
 
+type NumberSpacer = Maybe (Integer,String)
+
 -- | A structure value that shows what subsignals are present.
 newtype Structure
   = Structure [(SubSignal,Structure)]
@@ -164,7 +166,10 @@ data TranslatorVariant
   
   -- | A numerical value.
   | TNumber
-    { format :: NumberFormat -- ^ Format used to display data.
+    { format :: NumberFormat
+      -- ^ Format used to display data.
+    , spacer :: NumberSpacer
+      -- ^ Optional spacer to improve readability
     }
 
   -- | A constant translation value. The binary value
@@ -199,7 +204,9 @@ instance ToJSON Translator where
                       , "s" .= style ]]
                 TConst t -> object ["C" .= toJSON t]
                 TLut lut s -> object ["L" .= [toJSON lut,toJSON s]]
-                TNumber{format} -> object ["N" .= object ["f" .= format]]
+                TNumber{format,spacer} -> object ["N" .= object
+                  [ "f" .= format
+                  , "s" .= spacer]]
                 TArray{sub,len,start,sep,stop,preci,preco} -> object ["A" .= object 
                   [ "t" .= toJSON sub
                   , "l" .= len

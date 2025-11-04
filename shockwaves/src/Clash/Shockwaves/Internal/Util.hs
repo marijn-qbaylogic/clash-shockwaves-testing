@@ -17,10 +17,13 @@ import Data.Proxy
 import Data.Map (Map,member)
 import qualified Data.Map as M
 import Data.Typeable
+import Data.List.Split (chunksOf)
 import Control.Exception (SomeException, evaluate, catch)
 import GHC.IO (unsafeDupablePerformIO)
 import Control.DeepSeq (force, NFData)
 import Control.Exception.Base (Exception(toException))
+
+
 
 -- | Wrap parentheses around a value.
 parenthesize :: Value -> Value
@@ -83,3 +86,15 @@ safeWHNFOr dflt x = unsafeDupablePerformIO $ catch
             (\(_::SomeException) ->
               return dflt))
   (\(XException _e) -> return dflt)
+
+
+applySpacer :: NumberSpacer -> Value -> Value
+applySpacer Nothing v = v
+applySpacer (Just (0,_)) v = v
+applySpacer (Just (n,s)) v = v'
+  where
+    chunks = chunksOf (fromIntegral n) $ L.reverse v
+    v' = L.reverse (if L.last chunks == "-" then
+        joinWith (L.reverse s) (L.init chunks) <> "-"
+      else
+        joinWith (L.reverse s) chunks)
