@@ -111,6 +111,8 @@ enum TranslatorVariant {
     Number{
         #[serde(alias = "f")]
         format: NumberFormat,
+        #[serde(alias = "s")]
+        spacer: NumberSpacer,
     },
 
     #[serde(alias = "A")]
@@ -151,6 +153,8 @@ enum NumberFormat {
     #[serde(alias = "B")]
     Bin
 }
+
+type NumberSpacer = Option<(u32,String)>;
 
 #[derive(Serialize,Deserialize,Debug,Clone)]
 struct Structure(Vec<(String,Structure)>);
@@ -360,7 +364,33 @@ impl Data {
                 let translation = self.translate_with(t,value);
                 Translation(translation.0.clone(),vec![(n.clone(),translation)])
             },
-            TranslatorVariant::Number{format } => {
+            TranslatorVariant::Number{format ,spacer} => {
+                fn apply_spacer(sp:&NumberSpacer,v:String) -> String {
+                    match sp {
+                        None => v,
+                        Some((0,s)) => v,
+                        Some((n,s)) => {
+                            let n = *n as i32;
+                            let mut chunks = vec![];
+                            let mut i = v.len() as i32;
+                            while i>0 {
+                                chunks.push(&v[0i32.max(i-n) as usize ..i as usize]);
+                                i-=n;
+                            }
+                            let mut res = vec![];
+                            for i in 0..chunks.len() {
+                                res.push(chunks[i]);
+                                if i+1<chunks.len() && chunks[i+1]!="-" {
+                                    res.push(s);
+                                }
+                            }
+                            res.reverse();
+                            res.join("")
+                        }
+                    }
+                }
+
+
                 Translation(Some(match format {
                     NumberFormat::Sig   => {
                         // slightly cursed way of doing this - convert to base 256 bytes, then to bigint, then to string
@@ -379,15 +409,15 @@ impl Data {
                         
                         let big = BigInt::from_signed_bytes_le(&bytes);
 
-                        (big.to_string(),WaveStyle::Normal,11)
+                        (apply_spacer(spacer,big.to_string()),WaveStyle::Normal,11)
                     },
                     NumberFormat::Unsig => {
                         match BigUint::parse_bytes(value.as_bytes(),2) {
-                            Some(big) => (big.to_string(),WaveStyle::Normal,11),
+                            Some(big) => (apply_spacer(spacer,big.to_string()),WaveStyle::Normal,11),
                             None => {return error("unknown")},
                         }
                     },
-                    NumberFormat::Bin   => (value.to_string(),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Normal},11),
+                    NumberFormat::Bin   => (apply_spacer(spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Normal},11),
                     _ => error("{number format not implemented yet}").0.unwrap() // TODO: add oct and hex number formats
                 }),vec![])
             },
@@ -611,6 +641,7 @@ impl Structure {
 pub fn new() -> FnResult<()> {
     info!("SHOCKWAVES: new() - Hello!");
     // info!("new() but info");
+    // info!("SHOCKWAVES: conf dir = {:?}",unsafe{conf_dir()});
     Ok(())
 }
 
@@ -712,5 +743,6 @@ pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<
 extern "ExtismHost" {
     pub fn read_file(filename: String) -> Vec<u8>;
     pub fn file_exists(filename: String) -> bool;
+    // pub fn conf_dir() -> Json<Option<String>>;
 }
 
