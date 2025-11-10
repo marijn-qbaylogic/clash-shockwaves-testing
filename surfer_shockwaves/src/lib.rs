@@ -78,7 +78,9 @@ struct Configuration {
     override_bin_spacer: Option<NumberSpacer>,
 
     #[serde(default)]
-    style: Vec<String>,
+    styles: Vec<String>,
+    #[serde(default)]
+    style: Option<Table>,
 }
 
 type StyleMap = HashMap<String,Either<Option<WaveStyle>,toml::Value>>;
@@ -618,10 +620,12 @@ impl Config {
     }
 
     fn read_styles(&mut self) {
-        for sfile in self.global.style.clone() {
+        self.global.style.clone().map(|s|self.apply_styles(s));
+        for sfile in self.global.styles.clone() {
             self.read_style(sfile);
         }
-        for sfile in self.local.style.clone() {
+        self.local.style.clone().map(|s|self.apply_styles(s));
+        for sfile in self.local.styles.clone() {
             self.read_style(sfile);
         }
     }
@@ -647,12 +651,15 @@ impl Config {
         if let Some(file) = file {
             info!("Looking for style file {file}");
             if let Some(styles) = read_style_file(file) {
-                for (key,value) in styles.into_iter() {
-                    self.style.insert(key,Right(value));
-                }
+                self.apply_styles(styles);
             }
         } else {
             warn!("Could not find path for for {path:?}");
+        }
+    }
+    fn apply_styles(&mut self, styles:Table) {
+        for (key,value) in styles.into_iter() {
+            self.style.insert(key,Right(value));
         }
     }
 

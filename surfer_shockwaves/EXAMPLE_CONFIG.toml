@@ -27,6 +27,11 @@
 ### start with `./`, in which case they are taken relative to the source file.
 ### Style files are applied left-to-right, starting with those listed in the global
 ### configuration.
+#styles = ["./shockwaves_style"]
+
+
+
+### It is also possible to directly add style variables in the configuration.
 ###
 ### Style files take the form `var = value` where the value can be:
 ### - a hexadecimal color code string, i.e. `red = "#f00"`
@@ -34,4 +39,5 @@
 ### - one of the strings "NORMAL", "WARN", "ERROR"
 ### - a list of multiple variables, in which case the first defined value is
 ###   used, i.e. `bool_false = ["$gray","NORMAL"]`
-#style = ["./shockwaves_style"]
+[style]
+# var = "val"
