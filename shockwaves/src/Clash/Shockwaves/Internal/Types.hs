@@ -12,6 +12,7 @@ Type definitions for Shockwaves.
 
 module Clash.Shockwaves.Internal.Types where
 import Clash.Prelude hiding (sub)
+import qualified Data.List as L
 import Data.Map as M
 import Data.Data (Typeable)
 
@@ -23,6 +24,7 @@ import Data.String (IsString)
 import GHC.Exts (IsString(fromString))
 import Data.Colour.Names (readColourName)
 import Data.Maybe (fromJust)
+import Data.Char (digitToInt)
 
 -- some type aliases for clarity
 type TypeName = String
@@ -67,8 +69,13 @@ data Translation
 data WaveStyle
   = WSNormal -- ^ The default waveform style.
   | WSWarn -- ^ A warning value.
-  | WSError -- ^ An error value. TODO: Errors are propagated by translators.
+  | WSError -- ^ An error value. Errors are propagated by translators.
+  | WSUndef -- ^ An undefined value.
+  | WSHighImp -- ^ A high impedance value.
+  | WSDontCare -- ^ A value that does not matter.
+  | WSWeak -- ^ A weakly defined value.
   | WSColor Color -- ^ A custom color. See "Clash.Shockwaves.Style" for more information.
+  | WSVar String WaveStyle -- ^ A variable in a style configuration file, with a default.
   deriving (Show, Generic, Eq)
 
 instance NFData WaveStyle where
@@ -104,12 +111,12 @@ data TranslatorVariant
 
   -- | A reference to a lookup table.
   | TLut LUTName Structure
-  
+
   | TSum [Translator]
   -- ^ Select one translator to be used based on the first bits of the binary
   -- representation. Translate using the selected translator. Keep in mind that
   -- problems may occur if subsignal names are shared.
-  
+
   -- | Split the binary data into separate fields, translate each of these,
   -- and join together the values.
   --
@@ -143,7 +150,7 @@ data TranslatorVariant
     -- If no style is present in this field, or style is set to -1,
     -- use the default style instead.
     }
-  
+
   -- | An array value. This behaves much like 'TProduct', except that no labels
   -- are provided, and all fields use the same translator.
   | TArray
@@ -155,15 +162,15 @@ data TranslatorVariant
     , preci  :: Prec -- ^ Inner precedence: used on subvalues.
     , preco  :: Prec -- ^ Outer precedence: used for the combined value.
     }
-  
+
   -- | Translate a value only if the first bit of the binary representation is
   -- @1@. If it is @0@, display nothing.
   | TDuplicate SubSignal Translator
-  
+
   -- | Apply a style to a translation.
   -- Does not change the structure.
   | TStyled WaveStyle Translator
-  
+
   -- | A numerical value.
   | TNumber
     { format :: NumberFormat
@@ -181,6 +188,12 @@ data TranslatorVariant
 
 
 instance IsString WaveStyle where
+  fromString ('#':hex) = WSColor $ go $ L.map (fromIntegral . digitToInt) hex
+    where go :: [Word8] -> Color
+          go [r,r',g,g',b,b'] = RGB (16*r+r') (16*g+g') (16*b+b')
+          go [r,g,b] = RGB (17*r) (17*g) (17*b)
+          go _ = error ("bad hex code #"<>hex)
+  fromString ('$':var) = WSVar var WSNormal
   fromString s =
       WSColor . toSRGB24 . fromJust
     $ (readColourName s :: (Maybe (Colour Double)))
@@ -207,7 +220,7 @@ instance ToJSON Translator where
                 TNumber{format,spacer} -> object ["N" .= object
                   [ "f" .= format
                   , "s" .= spacer]]
-                TArray{sub,len,start,sep,stop,preci,preco} -> object ["A" .= object 
+                TArray{sub,len,start,sep,stop,preci,preco} -> object ["A" .= object
                   [ "t" .= toJSON sub
                   , "l" .= len
                   , "[" .= start
@@ -220,10 +233,15 @@ instance ToJSON Translator where
 
 instance ToJSON WaveStyle where
   toJSON = \case
-    WSNormal  -> "N"
-    WSWarn    -> "W"
-    WSError   -> "E"
-    WSColor (RGB r g b) -> object ["C" .= toJSON [r,g,b,255]]
+    WSNormal   -> "N"
+    WSWarn     -> "W"
+    WSError    -> "E"
+    WSUndef    -> "U"
+    WSHighImp  -> "Z"
+    WSDontCare -> "X"
+    WSWeak     -> "Q"
+    WSColor (RGB r g b) -> object ["C" .= [r,g,b,255]]
+    WSVar var dflt -> object ["V" .= [toJSON var, toJSON dflt]]
 instance ToJSON NumberFormat where
   toJSON = \case
     NFSig -> "S"

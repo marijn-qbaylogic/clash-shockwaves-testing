@@ -203,7 +203,7 @@ translationT = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
   , testGroup "St" $ pats [ St{b=3,a=False}                    , undef                              ]
                           [\(T _ ["a":@T _ [_],"b":@T _ []])->0, \(T _ ["a":@T _ [],"b":@T _ []])->0]
   , testGroup "C"  $ pats [ Red                                             , Green                                                    ]
-                          [\(T ("Red","red") ["Red":@T ("Red","red") []])->0, \(T ("Green","lime") ["Green":@T ("Green","lime") []])->0]
+                          [\(T ("Red",WSVar "red" "red") ["Red":@T ("Red",WSVar "red" "red") []])->0, \(T ("Green",WSVar "green" "lime") ["Green":@T ("Green",WSVar "green" "lime") []])->0]
   , testGroup "L"  $ pats [ La True False                                            , undef       ]
                              [\(T (_,"red") ["La":@T (_,"red") ["0":@ _,"1":@ _]])->0, \(T _ [])->0]
   , testGroup "Maybe" $ pats [ Nothing    , Just True               , undef       ]

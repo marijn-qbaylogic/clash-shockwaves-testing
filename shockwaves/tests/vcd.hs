@@ -39,6 +39,7 @@ tests =
   , test "Maybe" $ values [Nothing, Just True, undef]
   , test "Vec2"  $ values [True :> False :> Nil, undef :> undef :> Nil, undef]
   , test "Vec0"  $ values [Nil @Bool, undef]
+  , test "Signed32" $ values [0::Signed 32,12345,1234567,-123456,-1234567]
   ]
 
 
