@@ -1,6 +1,8 @@
 
 use compile_time::datetime_str;
 
+use either::Either;
+use either::Either::*;
 use extism_pdk::{plugin_fn, FnResult, Json};
 use extism_pdk::host_fn;
 use extism_pdk::{info,warn,error};
@@ -18,6 +20,7 @@ use std::iter::zip;
 use std::sync::Mutex;
 
 use serde_json;
+use toml::{Table, Value as TVal};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -34,13 +37,59 @@ type StructureMap = HashMap<String,Structure>;
 
 type LUT = HashMap<String,Translation>;
 
+#[derive(Debug)]
+struct State {
+    data: Data,
+    config: Config,
+    cache: Cache,
+}
+
+#[derive(Debug,Default)]
+struct Cache {
+    structures: StructureMap,
+}
+
+#[derive(Debug,Default)]
+struct Config {
+    global: Configuration,
+    local: Configuration,
+
+    conf_dir: Option<Utf8PathBuf>,
+    wavesource_dir: Option<Utf8PathBuf>,
+
+    style: StyleMap,
+}
+
+
+#[derive(Debug,Serialize,Deserialize,Default)]
+struct Configuration {
+    #[serde(default)]
+    propagate_errors: Option<bool>,
+
+    #[serde(default)]
+    override_sig_spacer: Option<NumberSpacer>,
+    #[serde(default)]
+    override_uns_spacer: Option<NumberSpacer>,
+    #[serde(default)]
+    override_hex_spacer: Option<NumberSpacer>,
+    #[serde(default)]
+    override_oct_spacer: Option<NumberSpacer>,
+    #[serde(default)]
+    override_bin_spacer: Option<NumberSpacer>,
+
+    #[serde(default)]
+    styles: Vec<String>,
+    #[serde(default)]
+    style: Option<Table>,
+}
+
+type StyleMap = HashMap<String,Either<Option<WaveStyle>,toml::Value>>;
+
 #[derive(Serialize,Deserialize,Debug)]
 struct Data {
     signals: SigMap,
     types:   TypeMap,
     luts:    LUTMap,
-    #[serde(default)]
-    structures: StructureMap,
 }
 
 #[derive(Serialize,Deserialize,Debug,Clone)]
@@ -49,7 +98,7 @@ struct Translation(Render,Vec<(String,Translation)>);
 type Render = Option<(Value,WaveStyle,Prec)>;
 type Value = String;
 
-#[derive(Serialize,Deserialize,Debug,Clone,Copy)]
+#[derive(Serialize,Deserialize,Debug,Clone)]
 enum WaveStyle {
     #[serde(alias = "N")]
     Normal,
@@ -58,7 +107,9 @@ enum WaveStyle {
     #[serde(alias = "E")]
     Error,
     #[serde(alias = "C")]
-    Color(Color32)
+    Color(Color32),
+    #[serde(alias = "V")]
+    Var(String,Box<WaveStyle>),
 }
 
 type Prec = i16;
@@ -145,7 +196,7 @@ enum NumberFormat {
     #[serde(alias = "S")]
     Sig,
     #[serde(alias = "U")]
-    Unsig,
+    Uns,
     #[serde(alias = "H")]
     Hex,
     #[serde(alias = "O")]
@@ -171,10 +222,9 @@ struct Structure(Vec<(String,Structure)>);
 
 
 lazy_static!{
-    static ref STATE: Mutex<Data> = Mutex::new(Data::new());
+    static ref STATE: Mutex<State> = Mutex::new(State::new());
 }
 lazy_static!{
-//    static ref TRANSLATOR_NOT_FOUND: Translator = Translator{width:0,trans:TranslatorVariant::Const(Translation(Some((String::from("{translator not found}"),WaveStyle::Error,11)),vec![]))};
     static ref TRANSLATOR_NOT_FOUND: Translator = 
         Translator{
             width:0,
@@ -189,7 +239,7 @@ lazy_static!{
 
 
 
-// some helper functions
+// helper functions
 
 fn signal_name(signal:&VariableMeta) -> String {
     signal.var.path.strs.join(".")+"."+&signal.var.name
@@ -198,98 +248,70 @@ fn signal_name(signal:&VariableMeta) -> String {
 
 // main functions
 
-impl Data {
+impl State {
     fn new() -> Self {
         Self {
-            signals: HashMap::new(),
-            types: HashMap::new(),
-            luts: HashMap::new(),
-            structures: HashMap::new(),
+            data: Data::new(),
+            config: Config::default(),
+            cache: Cache::default(),
+        }
+    }
+
+    fn set_data(&mut self,data:Data) {
+        self.data=data;
+        self.replace_wavestyles();
+        self.cache=Cache::default();
+    }
+
+    fn replace_wavestyles(&mut self) {
+        for translator in self.data.types.values_mut() {
+            translator.replace_wavestyles(&mut self.config);
         }
     }
 
     /// Determine the full structure of a signal.
     fn structure(&mut self, signal: &String) -> VariableInfo {
         // lookup signal type
-        let ty = self.get_type(signal).unwrap();
+        let ty = self.data.get_type(signal).unwrap();
 
         // try to return structure from cache
-        if let Some(st) = self.structures.get(ty) {
+        if let Some(st) = self.cache.structures.get(ty) {
             return st.convert();
         }
 
         // lookup type translator
-        let trans = self.get_translator(ty);
-        let st = self.trans_structure(trans);
+        let trans = self.data.get_translator(ty);
+        let st = self.data.trans_structure(trans);
         let ty = ty.clone();
 
         // create non-flattened structure for type
-        let st = self.structures.entry(ty).or_insert(st);
+        let st = self.cache.structures.entry(ty).or_insert(st);
 
         // convert to VariableInfo
         st.convert()
     }
 
-    /// Get the structure of a type
-    fn type_structure(&self, ty: &String) -> Structure {
-        // lookup type translator
-        let trans = self.get_translator(ty);
-
-        // create non-flattened structure for type
-        self.trans_structure(trans)
-    }
-
-    /// Get the structure of a translator
-    fn trans_structure(&self, trans: &Translator) -> Structure {
-        let Translator{trans, ..} = trans;
-        match trans {
-            TranslatorVariant::Ref(ty) => self.type_structure(ty),
-            TranslatorVariant::Sum(translators) => {
-                let ts = translators.iter().map(|t|
-                    self.trans_structure(t).0
-                ).flatten().collect();
-                Structure(ts)
-            },
-            TranslatorVariant::Product{subs, ..} => Structure(
-                subs.iter()
-                    .filter(|(name,_)| name.is_some())
-                    .map(|(name,t)| (name.as_ref().unwrap().clone(), self.trans_structure(t)))
-                    .collect()
-                ),
-            TranslatorVariant::Const(t) => Structure::from_trans(t),
-            TranslatorVariant::Lut(_, structure) => structure.clone(),
-            TranslatorVariant::Number{..} => Structure(vec![]),
-            TranslatorVariant::Array{ sub, len, ..} => Structure(
-                std::iter::repeat(self.trans_structure(sub)).take(*len as usize)
-                    .enumerate().map(|(i,s)| (i.to_string(),s))
-                    .collect()
-            ),
-            TranslatorVariant::Styled(_,translator) => self.trans_structure(translator),
-            TranslatorVariant::Duplicate(name,translator) => Structure(
-                vec![(name.clone(),self.trans_structure(translator))]
-            ),
-        }
-    }
-
     /// Translate a value.
     fn translate(&mut self, signal: &String, value: &str) -> TranslationResult {
         // lookup signal type
-        let ty = self.get_type(signal).unwrap().clone();
+        let ty = self.data.get_type(signal).unwrap().clone();
 
         // lookup type translator
-        let structure = if let Some(st) = self.structures.get(&ty) {
+        let structure = if let Some(st) = self.cache.structures.get(&ty) {
             st
         } else {
-            self.structures.insert(ty.clone(),self.type_structure(&ty));
-            self.structures.get(&ty).unwrap()
+            self.cache.structures.insert(ty.clone(),self.data.type_structure(&ty));
+            self.cache.structures.get(&ty).unwrap()
         };
-        let translator = self.get_translator(&ty);
+        let translator = self.data.get_translator(&ty);
         
         // translate value with translator
         let mut translation = self.translate_with(translator,value);
 
         //propagate errors
-        translation.prop_errors();
+        if self.config.do_prop_errors() {
+            translation.prop_errors();
+        }
 
         //fill out missing unknown fields
         translation.fill(&structure);
@@ -298,14 +320,8 @@ impl Data {
         translation.convert()
     }
 
-    /// Check whether a signal has a known associated Haskell type.
-    fn can_translate(&self, signal: &String) -> bool {
-        self.signals.get(signal).is_some()
-    }
 
-
-
-
+    
 
     /// Translate a value using the provided translator
     // fn translate_with(&self, translator: &Translator, value: &str) -> Translation {
@@ -352,7 +368,7 @@ impl Data {
                 t.clone()
             }
             TranslatorVariant::Lut(n,_) => {
-                match self.luts.get(n) {
+                match self.data.luts.get(n) {
                     Some(lut) => match lut.get(value) {
                         Some(t) => t.clone(),
                         None => error("{value missing from LUT}"),
@@ -368,7 +384,7 @@ impl Data {
                 fn apply_spacer(sp:&NumberSpacer,v:String) -> String {
                     match sp {
                         None => v,
-                        Some((0,s)) => v,
+                        Some((0,_)) => v,
                         Some((n,s)) => {
                             let n = *n as i32;
                             let mut chunks = vec![];
@@ -390,6 +406,7 @@ impl Data {
                     }
                 }
 
+                let spacer = self.config.get_spacer_override(&format).unwrap_or(spacer);
 
                 Translation(Some(match format {
                     NumberFormat::Sig   => {
@@ -409,15 +426,15 @@ impl Data {
                         
                         let big = BigInt::from_signed_bytes_le(&bytes);
 
-                        (apply_spacer(spacer,big.to_string()),WaveStyle::Normal,11)
+                        (apply_spacer(&spacer,big.to_string()),WaveStyle::Normal,11)
                     },
-                    NumberFormat::Unsig => {
+                    NumberFormat::Uns => {
                         match BigUint::parse_bytes(value.as_bytes(),2) {
-                            Some(big) => (apply_spacer(spacer,big.to_string()),WaveStyle::Normal,11),
+                            Some(big) => (apply_spacer(&spacer,big.to_string()),WaveStyle::Normal,11),
                             None => {return error("unknown")},
                         }
                     },
-                    NumberFormat::Bin   => (apply_spacer(spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Normal},11),
+                    NumberFormat::Bin   => (apply_spacer(&spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Normal},11),
                     _ => error("{number format not implemented yet}").0.unwrap() // TODO: add oct and hex number formats
                 }),vec![])
             },
@@ -474,7 +491,7 @@ impl Data {
                         if *style>=0 {
                             sub.get(*style as usize).map_or(WaveStyle::Normal,|f|
                                 f.1.0.as_ref()
-                                     .map_or(WaveStyle::Normal,|r| r.1)
+                                     .map_or(WaveStyle::Normal,|r| r.1.clone())
                             )
                         } else {
                             WaveStyle::Normal
@@ -489,7 +506,7 @@ impl Data {
                 )
             },
             TranslatorVariant::Ref(ty) => {
-                self.translate_with(&self.get_translator(ty),value)
+                self.translate_with(&self.data.get_translator(ty),value)
             },
             TranslatorVariant::Sum(translators) => {
                 let n = translators.len();
@@ -507,20 +524,74 @@ impl Data {
             TranslatorVariant::Styled(s, t) => {
                 let translation = self.translate_with(t,value);
                 match translation {
-                    Translation(Some((v,_,p)),sub) => Translation(Some((v,*s,p)),sub),
+                    Translation(Some((v,_,p)),sub) => Translation(Some((v,s.clone(),p)),sub),
                     trans => trans,
                 }
             },
         };
 
-
-
         fn error(msg: &str) -> Translation {
             Translation(Some((String::from(msg),WaveStyle::Error,11)),vec![])
         }
     }
+}
 
 
+impl Data {
+    fn new() -> Self {
+        Self {
+            signals: HashMap::new(),
+            types: HashMap::new(),
+            luts: HashMap::new(),
+        }
+    }
+
+    /// Get the structure of a type
+    fn type_structure(&self, ty: &String) -> Structure {
+        // lookup type translator
+        let trans = self.get_translator(ty);
+
+        // create non-flattened structure for type
+        self.trans_structure(trans)
+    }
+
+    /// Get the structure of a translator
+    fn trans_structure(&self, trans: &Translator) -> Structure {
+        let Translator{trans, ..} = trans;
+        match trans {
+            TranslatorVariant::Ref(ty) => self.type_structure(ty),
+            TranslatorVariant::Sum(translators) => {
+                let ts = translators.iter().map(|t|
+                    self.trans_structure(t).0
+                ).flatten().collect();
+                Structure(ts)
+            },
+            TranslatorVariant::Product{subs, ..} => Structure(
+                subs.iter()
+                    .filter(|(name,_)| name.is_some())
+                    .map(|(name,t)| (name.as_ref().unwrap().clone(), self.trans_structure(t)))
+                    .collect()
+                ),
+            TranslatorVariant::Const(t) => Structure::from_trans(t),
+            TranslatorVariant::Lut(_, structure) => structure.clone(),
+            TranslatorVariant::Number{..} => Structure(vec![]),
+            TranslatorVariant::Array{ sub, len, ..} => Structure(
+                std::iter::repeat(self.trans_structure(sub)).take(*len as usize)
+                    .enumerate().map(|(i,s)| (i.to_string(),s))
+                    .collect()
+            ),
+            TranslatorVariant::Styled(_,translator) => self.trans_structure(translator),
+            TranslatorVariant::Duplicate(name,translator) => Structure(
+                vec![(name.clone(),self.trans_structure(translator))]
+            ),
+        }
+    }
+
+
+    /// Check whether a signal has a known associated Haskell type.
+    fn can_translate(&self, signal: &String) -> bool {
+        self.signals.get(signal).is_some()
+    }
 
 
 
@@ -537,6 +608,144 @@ impl Data {
         }
     }
 }
+
+impl Config {
+    fn set_global_conf(&mut self, conf:Configuration) {
+        self.global = conf;
+        self.read_styles();
+    }
+    fn set_local_conf(&mut self, conf:Configuration) {
+        self.local = conf;
+        self.read_styles();
+    }
+
+    fn read_styles(&mut self) {
+        self.global.style.clone().map(|s|self.apply_styles(s));
+        for sfile in self.global.styles.clone() {
+            self.read_style(sfile);
+        }
+        self.local.style.clone().map(|s|self.apply_styles(s));
+        for sfile in self.local.styles.clone() {
+            self.read_style(sfile);
+        }
+    }
+
+    fn read_style(&mut self, sfile:String) {
+        let mut path = Utf8PathBuf::from(sfile.replace("\\","/"));
+        if let None = path.extension() {
+            path.set_extension("toml");
+        }
+
+        let file = if path.starts_with("./") {
+            //use local file - store VCD path in config
+            //info!("path relative to waveform dir {:?}",self.wavesource_dir);
+            self.wavesource_dir.as_ref().map(|dir|dir.join(&path).into_string())
+        } else if path.is_absolute() || path.to_string().chars().skip(1).next()==Some(':') { // C-style disk
+            //use absolute path
+            Some(path.to_string())
+        } else {
+            //use path relative to config dir
+            self.conf_dir.as_ref().map(|dir|dir.join(&path).into_string())
+        };
+
+        if let Some(file) = file {
+            info!("Looking for style file {file}");
+            if let Some(styles) = read_style_file(file) {
+                self.apply_styles(styles);
+            }
+        } else {
+            warn!("Could not find path for for {path:?}");
+        }
+    }
+    fn apply_styles(&mut self, styles:Table) {
+        for (key,value) in styles.into_iter() {
+            self.style.insert(key,Right(value));
+        }
+    }
+
+    fn get_style(&mut self, ws: &WaveStyle) -> WaveStyle {
+        match ws {
+            WaveStyle::Var(v,def) => {
+                self.get_style_var(v).unwrap_or_else(||self.get_style(&**def))
+            }
+            ws => ws.clone()
+        }
+    }
+    fn get_style_var(&mut self, var: &str) -> Option<WaveStyle> {
+        match self.style.get(var) {
+            Some(Left(ws)) => ws.clone(),
+            Some(Right(val)) => {
+                let ws = self.get_style_toml(val.clone());
+                self.style.insert(var.to_string(),Left(ws.clone()));
+                ws
+            }
+            None => {
+                error!("SHOCKWAVES: Unknown style var {var}");
+                None
+            }
+        }
+    }
+    fn get_style_toml(&mut self, val: TVal) -> Option<WaveStyle> {
+        match val {
+            TVal::String(s) => self.get_style_string(&s),
+            TVal::Array(a) => a.into_iter().filter_map(|v|self.get_style_toml(v)).next(),
+            v => {
+                error!("SHOCKWAVES: Could not parse value {v:?}");
+                None
+            }
+        }
+    }
+    fn get_style_string(&mut self, ws: &str) -> Option<WaveStyle> {
+        Some(match ws {
+            ws if ws=="NORMAL" => WaveStyle::Normal,
+            ws if ws=="WARN" => WaveStyle::Warn,
+            ws if ws=="ERROR" => WaveStyle::Error,
+            hex if hex.starts_with("#") => {
+                match Color32::from_hex(hex) {
+                    Ok(c) => WaveStyle::Color(c),
+                    Err(_) => {
+                        error!("SHOCKWAVES: Invalid hex code: {hex}");
+                        return None
+                    }
+                }
+            }
+            var if var.starts_with("$") => {
+                return self.get_style_var(&var[1..])
+            }
+            col => {
+                error!("SHOCKWAVES: Arbitrary color names are currently not surported: {col}");
+                return None
+            }
+        })
+        // hex6
+        // hex3
+        // var
+        // colname
+        // default name
+    }
+
+    fn do_prop_errors(&self) -> bool {
+        self.local.propagate_errors.unwrap_or(
+            self.global.propagate_errors.unwrap_or(true)
+        )
+    }
+
+    fn get_spacer_override(&self,f:&NumberFormat) -> Option<&NumberSpacer> {
+        match f {
+            NumberFormat::Bin => self.local.override_bin_spacer.as_ref().or(
+                self.global.override_bin_spacer.as_ref()),
+            NumberFormat::Oct => self.local.override_oct_spacer.as_ref().or(
+                self.global.override_oct_spacer.as_ref()),
+            NumberFormat::Hex => self.local.override_hex_spacer.as_ref().or(
+                self.global.override_hex_spacer.as_ref()),
+            NumberFormat::Uns => self.local.override_uns_spacer.as_ref().or(
+                self.global.override_uns_spacer.as_ref()),
+            NumberFormat::Sig => self.local.override_sig_spacer.as_ref().or(
+                self.global.override_sig_spacer.as_ref()),
+        }
+    }
+}
+
 
 impl Translation {
     /// Convert a Shockwaves `Translation` value into a Surfer `TranslationResult`
@@ -598,6 +807,11 @@ impl Translation {
             _ => false,
         }
     }
+    /// Replace variables with actual wavestyles
+    fn replace_wavestyles(&mut self,conf:&mut Config) {
+        self.0.as_mut().map(|(_,s,_)| s.replace_wavestyles(conf));
+        self.1.iter_mut().for_each(|(_,t)| t.replace_wavestyles(conf));
+    }
 }
 
 impl WaveStyle {
@@ -608,6 +822,37 @@ impl WaveStyle {
             WaveStyle::Warn   => ValueKind::Warn,
             WaveStyle::Error  => ValueKind::Warn,
             WaveStyle::Color(c) => ValueKind::Custom(c),
+            WaveStyle::Var(..) => unreachable!(),
+        }
+    }
+    fn replace_wavestyles(&mut self, conf:&mut Config) {
+        if let WaveStyle::Var(..) = self {
+            *self = conf.get_style(self);
+        }
+    }
+}
+
+impl Translator {
+    fn replace_wavestyles(&mut self, conf:&mut Config) {
+        self.trans.replace_wavestyles(conf);
+    }
+}
+
+impl TranslatorVariant {
+    fn replace_wavestyles(&mut self, conf:&mut Config) {
+        match self {
+            TranslatorVariant::Ref(_) => {},
+            TranslatorVariant::Sum(subs) => subs.iter_mut().for_each(|t|t.replace_wavestyles(conf)),
+            TranslatorVariant::Product{subs,..} => subs.iter_mut().for_each(|(_,t)|t.replace_wavestyles(conf)),
+            TranslatorVariant::Const(t) => t.replace_wavestyles(conf),
+            TranslatorVariant::Lut(..) => {},
+            TranslatorVariant::Number{..} => {},
+            TranslatorVariant::Array{sub,..} => sub.replace_wavestyles(conf),
+            TranslatorVariant::Styled(style, translator) => {
+                style.replace_wavestyles(conf);
+                translator.replace_wavestyles(conf);
+            },
+            TranslatorVariant::Duplicate(_, t) => t.replace_wavestyles(conf),
         }
     }
 }
@@ -639,23 +884,39 @@ impl Structure {
 
 #[plugin_fn]
 pub fn new() -> FnResult<()> {
-    info!("SHOCKWAVES: new() - Hello!");
-    // info!("new() but info");
-    // info!("SHOCKWAVES: conf dir = {:?}",unsafe{conf_dir()});
+    info!("SHOCKWAVES: Created plugin");
+
+    // rewrite: set conf dir, read global conf.
+
+    let dir = unsafe{conf_dir(())};
+    if let Ok(Json(Some(dir))) = dir {
+        let dir = Utf8PathBuf::from(&dir);
+        info!("SHOCKWAVES: Config dir: {dir:?}");
+
+        let mut file = dir.clone();
+        file.push("shockwaves.toml");
+        let file = file.into_string();
+
+        info!("SHOCKWAVES: Looking for global config file: {file}");
+        read_conf_file(file).map(|c| STATE.lock().unwrap().config.set_global_conf(c));
+
+        STATE.lock().unwrap().config.conf_dir=Some(dir);
+    } else {
+        info!("SHOCKWAVES: No config directory detected");
+    }
+    STATE.lock().unwrap().config.conf_dir=None;
     Ok(())
 }
 
 #[plugin_fn]
 pub fn name() -> FnResult<String> {
-    // error!("SHOCKWAVES: name()");
     Ok("Shockwaves ".to_string()+datetime_str!())
 }
 
 #[plugin_fn]
 pub fn translates(variable: VariableMeta) -> FnResult<TranslationPreference> {
-    // error!("SHOCKWAVES: translates({variable:?})");
     let signal = signal_name(&variable);
-    Ok(if STATE.lock().unwrap().can_translate(&signal) {
+    Ok(if STATE.lock().unwrap().data.can_translate(&signal) {
         TranslationPreference::Prefer
     } else {
         TranslationPreference::No
@@ -664,7 +925,6 @@ pub fn translates(variable: VariableMeta) -> FnResult<TranslationPreference> {
 
 #[plugin_fn]
 pub fn variable_info(variable: VariableMeta) -> FnResult<VariableInfo> {
-    // error!("SHOCKWAVES: variable_info({variable:?})");
     let signal = signal_name(&variable);
     Ok(STATE.lock().unwrap().structure(&signal))
 }
@@ -684,65 +944,120 @@ pub fn translate(
 #[plugin_fn]
 pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<()> {
     info!("SHOCKWAVES: Loading source {wave_source:?}");
-    // return Ok(());
 
-    if let Some(wave_source) = wave_source {
-        let file = match wave_source {
+    let source_file = wave_source.map(|ws|
+        match ws {
             WaveSource::File(f) => Some(f),
             WaveSource::Data => None,
             WaveSource::DragAndDrop(f) => f,
             WaveSource::Url(_) => None,
             WaveSource::Cxxrtl => None,
-        };
-
-        if let Some(file) = file {
-            let mut metafile = Utf8PathBuf::from(file);
-            metafile.set_extension("json");
-            let metafile = metafile.into_string();
-
-            info!("SHOCKWAVES: metafile {metafile}");
-            if let Ok(true) = unsafe{file_exists(metafile.clone())} {
-                let bytes = unsafe{read_file(metafile.clone())};
-                // info!("SHOCKWAVES: metadata is {bytes:?}");
-                match bytes {
-                    Ok(bytes) => {
-                        match serde_json::from_slice(&bytes) {
-                            Ok(data) => {
-                                info!("SHOCKWAVES: Parsed Shockwaves metadata file");
-                                *STATE.lock().unwrap() = data;
-                            }
-                            Err(e) => {
-                                error!("SHOCKWAVES: Could not parse Shockwaves metadata file: {e}");
-                                *STATE.lock().unwrap() = Data::new();
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("SHOCKWAVES: Could not read Shockwaves metadata file: {e}");
-                        *STATE.lock().unwrap() = Data::new();
-                    }
-                }
-            } else {
-                warn!("SHOCKWAVES: Could not find Shockwaves metadata file ({metafile})");
-                *STATE.lock().unwrap() = Data::new();
-            }
-
-        } else {
-            *STATE.lock().unwrap() = Data::new();
-            info!("SHOCKWAVES: Not loading Shockwaves translator for non-files");
         }
+    ).flatten().map(|ws|ws.replace("\\","/"));
+
+    let (data,conf,wavesource_dir) = if let Some(source_file) = source_file {
+        // if there is a proper file path, try to find the metadata file locally,
+        // as well as a local config file.
+
+        // META:
+        let mut metafile = Utf8PathBuf::from(&source_file);
+        metafile.set_extension("json");
+        let metafile = metafile.into_string();
+
+        info!("SHOCKWAVES: Looking for metadata file {metafile}");
+        let data = read_meta_file(metafile);
+
+        // CONF:
+        let mut ws_dir = Utf8PathBuf::from(&source_file);
+        ws_dir.pop();
+        let mut conf_file = ws_dir.clone();
+        conf_file.push("shockwaves.toml");
+        let conf_file = conf_file.into_string();
+
+        info!("SHOCKWAVES: Looking for local config file {conf_file}");
+        let conf = read_conf_file(conf_file);
+
+        (data,conf,Some(ws_dir))
     } else {
-        info!("SHOCKWAVES: No waveform source");
-        *STATE.lock().unwrap() = Data::new();
-    }
+        info!("SHOCKWAVES: No suitable waveform source");
+        (None,None,None)
+    };
+
+    let mut state = STATE.lock().unwrap();
+    state.config.wavesource_dir = wavesource_dir;
+    state.config.set_local_conf(conf.unwrap_or_else(||Configuration::default())); //change conf first, as this updates the styles too
+    state.set_data(data.unwrap_or_else(||Data::new()));
+
     Ok(())
 }
 
+fn try_read_file(file: String) -> Option<Vec<u8>> {
+    if let Ok(true) = unsafe{file_exists(file.clone())} {
+        let bytes = unsafe{read_file(file.clone())};
+        match bytes {
+            Ok(bytes) => {
+                Some(bytes)
+            }
+            Err(e) => {
+                error!("SHOCKWAVES: Could not read file: {e}");
+                None
+            }
+        }
+    } else {
+        warn!("SHOCKWAVES: File not found");
+        None
+    }
+}
+
+fn read_conf_file(file:String) -> Option<Configuration> {
+    try_read_file(file).map(|bytes|
+        match toml::from_slice(&bytes) {
+            Ok(conf) => {
+                info!("SHOCKWAVES: Parsed config file");
+                Some(conf)
+            }
+            Err(e) => {
+                error!("SHOCKWAVES: Could not config file: {e}");
+                None
+            }
+        }
+    ).flatten()
+}
+
+fn read_meta_file(file:String) -> Option<Data> {
+    try_read_file(file).map(|bytes|
+        match serde_json::from_slice(&bytes) {
+            Ok(data) => {
+                info!("SHOCKWAVES: Parsed metadata file");
+                Some(data)
+            }
+            Err(e) => {
+                error!("SHOCKWAVES: Could not parse metadata file: {e}");
+                None
+            }
+        }
+    ).flatten()
+}
+
+fn read_style_file(file:String) -> Option<Table> {
+    try_read_file(file).map(|bytes|
+        match toml::from_slice::<Table>(&bytes) {
+            Ok(style) => {
+                info!("SHOCKWAVES: Parsed metadata file");
+                Some(style)
+            }
+            Err(e) => {
+                error!("SHOCKWAVES: Could not parse metadata file: {e}");
+                None
+            }
+        }
+    ).flatten()
+}
 
 #[host_fn]
 extern "ExtismHost" {
     pub fn read_file(filename: String) -> Vec<u8>;
     pub fn file_exists(filename: String) -> bool;
-    // pub fn conf_dir() -> Json<Option<String>>;
+    pub fn conf_dir(_user_data: ()) -> Json<Option<String>>;
 }
 
