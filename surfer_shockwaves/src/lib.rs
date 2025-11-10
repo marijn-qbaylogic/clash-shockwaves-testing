@@ -104,6 +104,14 @@ enum WaveStyle {
     Normal,
     #[serde(alias = "W")]
     Warn,
+    #[serde(alias = "U")]
+    Undef,
+    #[serde(alias = "Z")]
+    HighImp,
+    #[serde(alias = "X")]
+    DontCare,
+    #[serde(alias = "Q")]
+    Weak,
     #[serde(alias = "E")]
     Error,
     #[serde(alias = "C")]
@@ -697,9 +705,13 @@ impl Config {
     }
     fn get_style_string(&mut self, ws: &str) -> Option<WaveStyle> {
         Some(match ws {
-            ws if ws=="NORMAL" => WaveStyle::Normal,
-            ws if ws=="WARN" => WaveStyle::Warn,
-            ws if ws=="ERROR" => WaveStyle::Error,
+            ws if ws=="NORMAL"   || ws=="N" => WaveStyle::Normal,
+            ws if ws=="WARN"     || ws=="W" => WaveStyle::Warn,
+            ws if ws=="ERROR"    || ws=="E" => WaveStyle::Undef,
+            ws if ws=="UNDEF"    || ws=="U" => WaveStyle::Undef,
+            ws if ws=="HIGHIMP"  || ws=="Z" => WaveStyle::HighImp,
+            ws if ws=="WEAK"     || ws=="Q" => WaveStyle::Weak,
+            ws if ws=="DONTCARE" || ws=="X" => WaveStyle::DontCare,
             hex if hex.starts_with("#") => {
                 match Color32::from_hex(hex) {
                     Ok(c) => WaveStyle::Color(c),
@@ -821,6 +833,12 @@ impl WaveStyle {
             WaveStyle::Normal => ValueKind::Normal,
             WaveStyle::Warn   => ValueKind::Warn,
             WaveStyle::Error  => ValueKind::Warn,
+            
+            WaveStyle::Undef => ValueKind::Undef,
+            WaveStyle::HighImp => ValueKind::HighImp,
+            WaveStyle::DontCare => ValueKind::DontCare,
+            WaveStyle::Weak => ValueKind::Weak,
+
             WaveStyle::Color(c) => ValueKind::Custom(c),
             WaveStyle::Var(..) => unreachable!(),
         }

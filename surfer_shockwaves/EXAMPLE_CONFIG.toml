@@ -34,7 +34,8 @@
 ### Style files take the form `var = value` where the value can be:
 ### - a hexadecimal color code string, i.e. `red = "#f00"`
 ### - a dollar sign followed by a different var, i.e. `bool_false = "$red"`
-### - one of the strings "NORMAL", "WARN", "ERROR"
+### - one of the strings "NORMAL"/"N", "WARN"/"W", "ERROR"/"E", "UNDEF"/"U",
+###   "HIGHIMP"/"Z", "WEAK"/"Q", "DONTCARE"/"X" for Surfer's builtin styles
 ### - a list of multiple variables, in which case the first defined value is
 ###   used, i.e. `bool_false = ["$gray","NORMAL"]`
 [style]
