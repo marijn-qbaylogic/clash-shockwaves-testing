@@ -800,11 +800,16 @@ instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a
 instance WaveformConst () where
   constRen = Just ("()",WSNormal,11)
 
-instance Waveform Bool
+instance Waveform Bool where
+  translator = Translator 1 $ TSum
+    [ Translator 0 $ TConst $ translate' False
+    , Translator 0 $ TConst $ translate' True ]
+  translate' False = Translation (Just ("False","$bool_false",11)) []
+  translate' True  = Translation (Just ("True","$bool_true",11)) []
 
 instance (Waveform a) => Waveform (Maybe a) where
   translator = Translator (width @(Maybe a)) $ TSum
-    [ Translator 0 $ TConst $ Translation (Just ("Nothing","grey",11)) []
+    [ Translator 0 $ TConst $ Translation (Just ("Nothing","$maybe_nothing",11)) []
     , Translator (width @a) $ TProduct
       { start = "Just "
       , sep = ""
@@ -816,7 +821,7 @@ instance (Waveform a) => Waveform (Maybe a) where
       , subs = [(Just "Just.0",ref (Proxy @a))]
       }
     ]
-  translate' Nothing = Translation (Just ("Nothing","grey",11)) []
+  translate' Nothing = Translation (Just ("Nothing","$maybe_nothing",11)) []
   translate' (Just x) = translateFromSubs t [("Just.0",translate x)] --safe?
     where
       t = case translator @(Maybe a) of
@@ -824,7 +829,8 @@ instance (Waveform a) => Waveform (Maybe a) where
         _ -> undefined
 
 
-instance (Waveform a, Waveform b) => Waveform (Either a b)
+instance (Waveform a, Waveform b) => Waveform (Either a b) where
+  styles = ["$either_left","$either_right"]
 
 instance (BitPack Char) => WaveformLUT Char where
   structureL = Structure []
