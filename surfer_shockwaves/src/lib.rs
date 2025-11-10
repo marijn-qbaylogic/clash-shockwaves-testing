@@ -55,7 +55,7 @@ struct Config {
     local: Configuration,
 
     conf_dir: Option<Utf8PathBuf>,
-    waveform_dir: Option<Utf8PathBuf>,
+    wavesource_dir: Option<Utf8PathBuf>,
 
     style: StyleMap,
 }
@@ -627,15 +627,16 @@ impl Config {
     }
 
     fn read_style(&mut self, sfile:String) {
-        let mut path = Utf8PathBuf::from(sfile);
+        let mut path = Utf8PathBuf::from(sfile.replace("\\","/"));
         if let None = path.extension() {
             path.set_extension("toml");
         }
 
         let file = if path.starts_with("./") {
             //use local file - store VCD path in config
-            self.waveform_dir.as_ref().map(|dir|dir.join(&path).into_string())
-        } else if path.is_absolute() || path.starts_with("C:") {
+            //info!("path relative to waveform dir {:?}",self.wavesource_dir);
+            self.wavesource_dir.as_ref().map(|dir|dir.join(&path).into_string())
+        } else if path.is_absolute() || path.to_string().chars().skip(1).next()==Some(':') { // C-style disk
             //use absolute path
             Some(path.to_string())
         } else {
@@ -945,9 +946,9 @@ pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<
             WaveSource::Url(_) => None,
             WaveSource::Cxxrtl => None,
         }
-    ).flatten();
+    ).flatten().map(|ws|ws.replace("\\","/"));
 
-    let (data,conf) = if let Some(source_file) = source_file {
+    let (data,conf,wavesource_dir) = if let Some(source_file) = source_file {
         // if there is a proper file path, try to find the metadata file locally,
         // as well as a local config file.
 
@@ -960,21 +961,23 @@ pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<
         let data = read_meta_file(metafile);
 
         // CONF:
-        let mut conf_file = Utf8PathBuf::from(&source_file);
-        conf_file.pop(); //breaks on windows paths :/
+        let mut ws_dir = Utf8PathBuf::from(&source_file);
+        ws_dir.pop();
+        let mut conf_file = ws_dir.clone();
         conf_file.push("shockwaves.toml");
         let conf_file = conf_file.into_string();
 
         info!("SHOCKWAVES: Looking for local config file {conf_file}");
         let conf = read_conf_file(conf_file);
 
-        (data,conf)
+        (data,conf,Some(ws_dir))
     } else {
         info!("SHOCKWAVES: No suitable waveform source");
-        (None,None)
+        (None,None,None)
     };
 
     let mut state = STATE.lock().unwrap();
+    state.config.wavesource_dir = wavesource_dir;
     state.config.set_local_conf(conf.unwrap_or_else(||Configuration::default())); //change conf first, as this updates the styles too
     state.set_data(data.unwrap_or_else(||Data::new()));
 
