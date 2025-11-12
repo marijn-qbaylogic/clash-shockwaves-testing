@@ -485,7 +485,7 @@ dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
   -- Add clocks to traceMap
   traceMapWithClocks = Map.union traceMap $ Map.fromList $ map go clocks
     where 
-       go (name,period) = (name,(undefined, period, 1, Nothing, cycle [(0,0),(0,1)]))
+       go (name,period) = (name,(undefined, period*500, 1, Nothing, cycle [(0,0),(0,1)]))
 
 
   -- The timescale used for timescale units. Clocks are included at their
@@ -510,7 +510,7 @@ dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
       go n u _ = show n <> " " <> u
   
   -- Convert VCDTime values to actual timestamps
-  withTimescale (VCDTime p t _s) = 1000*p + t*signalTimescale
+  withTimescale (VCDTime p t _s) = (1000*p + t*signalTimescale) `div` timescale
   start'      = withTimescale start
   stop'       = withTimescale stop
   startDelay' = withTimescale startDelay
@@ -552,7 +552,7 @@ dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
   normalize' _      _             = Nothing
 
   slice :: [a] -> [a]
-  slice values = drop start' $ take stop' values
+  slice values = drop start' $ take (stop'+1) values
 
   --
   lutMap = foldl (flip ($)) Map.empty $ concat $ catMaybes addValuess'
@@ -581,7 +581,7 @@ dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
 
   -- | Format single value according to VCD spec
   format :: Width -> String -> Value -> String
-  format 1 label (0,0)   = '0': label <> "\n"
+  format 1 label (0,0)   = '0': label <> "\n" --TODO: why the newline???
   format 1 label (0,1)   = '1': label <> "\n"
   format 1 label (1,_)   = 'x': label <> "\n"
   format 1 label (mask,val) =
@@ -602,6 +602,7 @@ dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
 
   bodyParts :: [Maybe Text.Text]
   bodyParts = zipWith go [0..] (map bodyPart (Data.List.transpose tails))
+              <> [Just $ Text.concat ["#", Text.pack $ show stop', "\n"]]
     where
       go :: Int -> Maybe Text.Text -> Maybe Text.Text
       go (Text.pack . show -> n) t =
