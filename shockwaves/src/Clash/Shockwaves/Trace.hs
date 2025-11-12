@@ -56,6 +56,7 @@ main = do
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.Normalise       #-}
@@ -72,6 +73,13 @@ module Clash.Shockwaves.Trace
 
   -- * VCD dump functions
   , dumpVCD
+  , advancedDumpVCD
+  , VCDTime
+  , simCycles
+  , clockCycles
+  , timePs
+  , exactTime
+  , clockWave
 
   -- * Replay functions
   , dumpReplayable
@@ -99,7 +107,8 @@ import           Prelude
 
 -- Clash:
 import           Clash.Annotations.Primitive (hasBlackBox)
-import           Clash.Signal.Internal (fromList)
+import           Clash.Signal.Internal (fromList,DomainPeriod)
+import           Clash.Signal          (clockPeriod)
 import           Clash.Signal
   (KnownDomain(..), SDomainConfiguration(..), Signal, bundle, unbundle)
 import           Clash.Sized.Vector    (Vec, iterateI)
@@ -166,10 +175,55 @@ type Width    = Int
 type TypeRepBS = ByteString
 
 type AddValue = LUTMap -> LUTMap
-type TraceMap = Map.Map String (TypeRepBS, Period, Width, [AddValue], [Value])
+type TraceMap = Map.Map String (TypeRepBS, Period, Width, Maybe [AddValue], [Value])
 type Maps     = (SignalMap,TypeMap,TraceMap)
 
 type JSON = Json.Value
+
+-- | A type for keeping track of time values for use with advancedDumpVCD
+data VCDTime = VCDTime
+  { vcdTimePs :: Period -- ^ Time in ps
+  , vcdTimeTs :: Period -- ^ Time in signal timescale units
+  , vcdTimeStrict :: Bool -- ^ Whether to force exact times
+  }
+
+instance Num VCDTime where
+  (VCDTime p t s) + (VCDTime p' t' s') = VCDTime (p+p') (t+t') (s && s')
+  negate (VCDTime p t s) = VCDTime (-p) (-t) s
+  fromInteger n = VCDTime 0 (fromInteger n) False
+  (*) = error "Cannot multiply time values"
+  abs = error "Cannot take absolute value of time"
+  signum = error "Signum unavailable for time values"
+
+-- | A time unit in multiples of the GCD of the periods of all traced signals.
+-- This is the default unit (i.e. number literals will be transformed using this
+-- function), but may not be practical in designs with multiple clocks.
+simCycles :: Int -> VCDTime
+simCycles n = VCDTime 0 n False
+
+-- | A time unit in multiples of a clock period in the provided domain.
+clockCycles :: forall dom period. (KnownDomain dom, DomainPeriod dom ~ period) => Int -> VCDTime
+clockCycles n = VCDTime 0 (n * clockPeriod' @dom) False
+
+-- | A time unit in ps.
+timePs :: Int -> VCDTime
+timePs n = VCDTime n 0 False
+
+-- | Make a time moment exact. By default, times are rounded down to the nearest
+-- time value that is a multiple of the time scale used. By making the time
+-- exact, the time value will be considered into the computation of the time scale.
+exactTime :: VCDTime -> VCDTime
+exactTime t = t{vcdTimeStrict=True}
+
+
+-- | Create a named clock signal for a domain.
+clockWave :: forall dom. KnownDomain dom => String -> (String,Period)
+clockWave label = (label, clockPeriod' @dom)
+
+-- | Get the clock period of a domain as a 'Period' value.
+clockPeriod' :: forall dom. KnownDomain dom => Period
+clockPeriod' = snatToNum $ clockPeriod @dom
+
 
 -- | Map of traces used by the non-internal trace and dumpvcd functions.
 maps# :: IORef Maps
@@ -214,9 +268,9 @@ traceSignal# maps period traceName signal =
         , Map.insert
             traceName
             ( encode (typeRep @a)
-            , period
+            , period * 1000 -- convert to fs
             , width
-            , if hasLUT @a then map addValue $ sample signal else repeat id
+            , if hasLUT @a then Just $ map addValue $ sample signal else Nothing
             , mkTrace signal)
             traces
         )
@@ -361,7 +415,7 @@ traceVecSignal1 traceName signal =
 iso8601Format :: UTCTime -> String
 iso8601Format = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S"
 
-toPeriodMap :: TraceMap -> Map.Map Period [(String, Width, [AddValue], [Value])]
+toPeriodMap :: TraceMap -> Map.Map Period [(String, Width, Maybe [AddValue], [Value])]
 toPeriodMap m = foldl' go Map.empty (Map.assocs m)
   where
     go periodMap (traceName, (_rep, period, width, addValues, values)) =
@@ -377,17 +431,22 @@ printable (ord -> c) = 33 <= c && c <= 126
 
 -- | Same as @dumpVCD@, but supplied with a custom tracemap and a custom timestamp
 dumpVCD##
-  :: (Int, Int)
-  -- ^ (offset, number of samples)
+  :: (VCDTime, VCDTime)
+  -- ^ (start, stop)
+  -> VCDTime
+  -- ^ time of first clock edge
+  -> [(String,Period)]
+  -- ^ list of clock signals
   -> Maps
   -> UTCTime
   -> Either String (Text.Text, JSON)
-dumpVCD## (offset, cycles) (signalMap,typeMap,traceMap) now
-  | offset < 0 =
-      error $ "dumpVCD: offset was " ++ show offset ++ ", but cannot be negative."
-  | cycles < 0 =
-      error $ "dumpVCD: cycles was " ++ show cycles ++ ", but cannot be negative."
-  | null traceMap =
+dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
+  -- TODO: equivalent
+  -- | offset < 0 =
+  --     error $ "dumpVCD: offset was " ++ show offset ++ ", but cannot be negative."
+  -- | stop < 0 =
+  --     error $ "dumpVCD: cycles was " ++ show cycles ++ ", but cannot be negative."
+  | null traceMap && null clocks =
       error $ "dumpVCD: no traces found. Extend the given trace names."
   | (nm:_) <- offensiveNames =
       Left $ unwords [ "Trace '" ++ nm ++ "' contains"
@@ -416,46 +475,90 @@ dumpVCD## (offset, cycles) (signalMap,typeMap,traceMap) now
  where
   offensiveNames = filter (any (not . printable)) traceNames
 
+  -- Create labels like reversed integers (e.g. 1,2,01,11,21,02,12,22,001)
   labels = map go [1..]
    where
     go 0 = ""
     go n = chr ( 33 + n `mod` l) : go (n `div` l)
     l = 126-33+1
 
-  timescale = foldl1' gcd (Map.keys periodMap)
-  periodMap = toPeriodMap traceMap
+  -- Add clocks to traceMap
+  traceMapWithClocks = Map.union traceMap $ Map.fromList $ map go clocks
+    where 
+       go (name,period) = (name,(undefined, period, 1, Nothing, cycle [(0,0),(0,1)]))
+
+
+  -- The timescale used for timescale units. Clocks are included at their
+  -- nominal frequency.
+  -- Defined in fs.
+  signalTimescale = foldl1' gcd (Map.keys periodMap <> map ((*1000) . snd) clocks)
+  periodMap = toPeriodMap traceMapWithClocks
+
+  -- Compute the final timescale depending on the signals, the clocks (which
+  -- have double their nominal frequencies), and any strict time arguments.
+  -- Defined in fs.
+  timescale = foldl1' gcd
+    (  [signalTimescale]
+    <> map ((*500) . snd) clocks
+    <> [p*1000 | VCDTime p _t s <- [start,stop,startDelay], s]
+    )
+  
+  -- Use the largest timescale possible for the VCD file.
+  timescaleWithUnit = go timescale "fs" ["ps","ns","us","ms","s"]
+    where
+      go n _ (u:us) | mod n 1000==0 = go (n `div` 1000) u us
+      go n u _ = show n <> " " <> u
+  
+  -- Convert VCDTime values to actual timestamps
+  withTimescale (VCDTime p t _s) = 1000*p + t*signalTimescale
+  start'      = withTimescale start
+  stop'       = withTimescale stop
+  startDelay' = withTimescale startDelay
 
   -- Normalize traces until they have the "same" period. That is, assume
   -- we have two traces; trace A with a period of 20 ps and trace B with
   -- a period of 40 ps:
   --
-  --   A: [A1, A2, A3, ...]
-  --   B: [B1, B2, B3, ...]
+  --   A: [A0, A1, A2, A3, ...]
+  --   B: [B0, B1, B2, B3, ...]
   --
   -- After normalization these look like:
   --
-  --   A: [A1, A2, A3, A4, A5, A6, ...]
-  --   B: [B1, B1, B2, B2, B3, B3, ...]
+  --   A: [A0, A1, A2, A3, A4, A5, A6, ...]
+  --   B: [B0, B1, B1, B2, B2, B3, B3, ...]
   --
   -- ..because B is "twice as slow" as A.
+  --
+  -- Note that the first value, which is the initial value, is not changed based
+  -- on the clock period, since the first clock edge happens at the same time
+  -- for all domains.
   (periods, traceNames, widths, addValuess, valuess) =
     unzip5 $ map
       (\(a, (b, c, d, e)) -> (a, b, c, d, e))
       (flattenMap periodMap)
 
   periods'    = map (`quot` timescale) periods
-  valuess'    = map slice $ zipWith normalize  periods' valuess
-  addValuess' = map slice $ zipWith normalize' periods' addValuess
+  valuess'    = map slice        $ zipWith normalize  periods' valuess
+  addValuess' = map (fmap slice) $ zipWith normalize' periods' addValuess
   
-  normalize  period (v:values)    = v: concatMap (replicate period) values
+  -- Copy values, but only copy LUT add function once.
+  normalize  period (v:values) = 
+       replicate (startDelay'+1) v
+    <> concatMap (replicate period) values
   normalize  _      []            = []
-  normalize' period (a:addValues) = a: concatMap (\x -> x : replicate (period-1) id) addValues
-  normalize' _      []            = []
+  normalize' period (Just (a:addValues)) =
+    Just $    replicate (startDelay'+1) a
+           <> concatMap (\x -> x : replicate (period-1) id) addValues
+  normalize' _      _             = Nothing
+
   slice :: [a] -> [a]
-  slice values = drop offset $ take cycles values
+  slice values = drop start' $ take stop' values
 
-  lutMap = foldl (flip ($)) Map.empty $ concat addValuess'
+  --
+  lutMap = foldl (flip ($)) Map.empty $ concat $ catMaybes addValuess'
 
+
+  -- HEADERS
   headerDate       = ["$date", Text.pack $ iso8601Format now, "$end"]
 
 #ifdef CABAL
@@ -465,12 +568,13 @@ dumpVCD## (offset, cycles) (signalMap,typeMap,traceMap) now
 #endif
   headerVersion    = ["$version", "Generated by Clash", Text.pack clashVer , "$end"]
   headerComment    = ["$comment", "No comment", "$end"]
-  headerTimescale  = ["$timescale", (show timescale) ++ "ps", "$end"]
+  headerTimescale  = ["$timescale", timescaleWithUnit, "$end"]
   headerWires      = [ Text.unwords $ headerWire w l n
                      | (w, l, n) <- (zip3 widths labels traceNames)]
   headerWire w l n = map Text.pack ["$var wire", show w, l, n, "$end"]
   initValues       = map Text.pack $ zipWith ($) formatters inits
 
+  -- SIGNALS
   formatters = zipWith format widths labels
   inits = map (maybe (error "dumpVCD##: empty value") fst . uncons) valuess'
   tails = map changed valuess'
@@ -515,17 +619,22 @@ dumpVCD#
   :: NFDataX a
   => IORef Maps
   -- ^ Map with collected traces
-  -> (Int, Int)
-  -- ^ (offset, number of samples)
-  -> Signal dom a
-  -- ^ (One of) the output(s) the circuit containing the traces
+  -> (VCDTime, VCDTime)
+  -- ^ (start time, stop time)
+  -> VCDTime
+  -- ^ Time at which the first clock edges appear.
+  -> [(String,Period)]
+  -- ^ List of clock waveforms to generate.
   -> [String]
+  -- ^ The names of the traces you definitely want to be dumped in the VCD file
+  -> Signal dom a
+  -- ^ (One of) the outputs of the circuit containing the traces
   -- ^ The names of the traces you definitely want to be dumped to the VCD file
   -> IO (Either String (Text.Text, JSON))
-dumpVCD# maps slice signal traceNames = do
+dumpVCD# maps slice startDelay clocks traceNames signal = do
   waitForTraces# maps signal traceNames
   m <- readIORef maps
-  fmap (dumpVCD## slice m) getCurrentTime
+  fmap (dumpVCD## slice startDelay clocks m) getCurrentTime
 
 -- | Produce a four-state VCD (Value Change Dump) according to IEEE
 -- 1364-{1995,2001}. This function fails if a trace name contains either
@@ -552,7 +661,42 @@ dumpVCD
   -> [String]
   -- ^ The names of the traces you definitely want to be dumped in the VCD file
   -> IO (Either String (Text.Text, JSON))
-dumpVCD = dumpVCD# maps#
+dumpVCD (start,stop) sig traceNames = dumpVCD# maps# (simCycles start,simCycles stop) 0 [] traceNames sig
+
+
+
+-- | Produce a four-state VCD (Value Change Dump) according to IEEE
+-- 1364-{1995,2001}. This function fails if a trace name contains either
+-- non-printable or non-VCD characters.
+--
+-- Due to lazy evaluation, the created VCD files might not contain all the
+-- traces you were expecting. You therefore have to provide a list of names
+-- you definately want to be dumped in the VCD file.
+--
+-- For example:
+--
+-- @
+-- vcd <- dumpVCD (0, 100) 0 [clockWave "clk" @Dom] ["main", "sub"] cntrOut
+-- @
+--
+-- Evaluates /cntrOut/ long enough in order for to guarantee that the @main@,
+-- and @sub@ traces end up in the generated VCD file.
+advancedDumpVCD
+  :: NFDataX a
+  => (VCDTime, VCDTime)
+  -- ^ (start time, stop time)
+  -> VCDTime
+  -- ^ Time at which the first clock edges appear.
+  -> [(String,Period)]
+  -- ^ List of clock waveforms to generate.
+  -> [String]
+  -- ^ The names of the traces you definitely want to be dumped in the VCD file
+  -> Signal dom a
+  -- ^ (One of) the outputs of the circuit containing the traces
+  -> IO (Either String (Text.Text, JSON))
+advancedDumpVCD = dumpVCD# maps#
+
+
 
 -- | Dump a number of samples to a replayable bytestring.
 dumpReplayable
@@ -637,15 +781,3 @@ waitForTraces# maps signal traceNames = do
       deepseqX
         s0
         (go ss nm)
--- -- old version using lists (but it does work!)
---   rest <- foldM go (sample signal) traceNames 
---   return $ deepseqX (head rest) ()
---  where
---   go s nm = do
---     (_,_,m) <- readIORef maps
---     if Map.member nm m then
---       return s
---     else
---       deepseqX
---         (head s)
---         (go (tail s) nm)
