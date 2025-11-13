@@ -749,49 +749,49 @@ for i in range(2,12):
 	c = ",".join("Waveform "+k for k in v)
 	vs = ",".join(v)
 	print(f"""instance ({c}) => Waveform ({vs}) where
-  translator = Translator (width @({vs})) $ TProduct{{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep ({vs}) ()) undefined}}
+  translator = Translator (width @({vs})) $ TProduct{{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep ({vs}) ()) undefined}}
   translate' x = translateFromSubs (translator @({vs})) $ translateAllG (from x::Rep ({vs}) ())
 """)
 -}
 
 instance (Waveform a0,Waveform a1) => Waveform (a0,a1) where
-  translator = Translator (width @(a0,a1)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1) ()) undefined}
+  translator = Translator (width @(a0,a1)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1)) $ translateAllG (from x::Rep (a0,a1) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2) => Waveform (a0,a1,a2) where
-  translator = Translator (width @(a0,a1,a2)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2) ()) undefined}
+  translator = Translator (width @(a0,a1,a2)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2)) $ translateAllG (from x::Rep (a0,a1,a2) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3) => Waveform (a0,a1,a2,a3) where
-  translator = Translator (width @(a0,a1,a2,a3)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3)) $ translateAllG (from x::Rep (a0,a1,a2,a3) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4) => Waveform (a0,a1,a2,a3,a4) where
-  translator = Translator (width @(a0,a1,a2,a3,a4)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3,a4) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3,a4)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3,a4) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3,a4)) $ translateAllG (from x::Rep (a0,a1,a2,a3,a4) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5) => Waveform (a0,a1,a2,a3,a4,a5) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3,a4,a5)) $ translateAllG (from x::Rep (a0,a1,a2,a3,a4,a5) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6) => Waveform (a0,a1,a2,a3,a4,a5,a6) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3,a4,a5,a6)) $ translateAllG (from x::Rep (a0,a1,a2,a3,a4,a5,a6) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3,a4,a5,a6,a7)) $ translateAllG (from x::Rep (a0,a1,a2,a3,a4,a5,a6,a7) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3,a4,a5,a6,a7,a8)) $ translateAllG (from x::Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8,Waveform a9) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9)) $ translateAllG (from x::Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) ())
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8,Waveform a9,Waveform a10) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) ()) undefined}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci=0,preco=11,style= -1,subs=L.map (first Just) $ enumLabel $ translatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) ()) undefined}
   translate' x = translateFromSubs (translator @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)) $ translateAllG (from x::Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) ())
 
 

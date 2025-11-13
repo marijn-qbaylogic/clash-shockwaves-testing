@@ -14,6 +14,7 @@ module Clash.Shockwaves.Waveform (
   Prec,
   SubSignal,
   Translator(..),
+  TranslatorVariant(..),
   Structure(..),
   structure,
   NumberFormat(..),
