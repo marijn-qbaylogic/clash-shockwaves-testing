@@ -275,6 +275,11 @@ impl State {
         for translator in self.data.types.values_mut() {
             translator.replace_wavestyles(&mut self.config);
         }
+        for lut in self.data.luts.values_mut() {
+            for trans in lut.values_mut() {
+                trans.replace_wavestyles(&mut self.config);
+            }
+        }
     }
 
     /// Determine the full structure of a signal.
@@ -628,6 +633,8 @@ impl Config {
     }
 
     fn read_styles(&mut self) {
+        info!("SHOCKWAVES: Reapplying styles");
+        self.style.clear();
         self.global.style.clone().map(|s|self.apply_styles(s));
         for sfile in self.global.styles.clone() {
             self.read_style(sfile);
@@ -840,7 +847,10 @@ impl WaveStyle {
             WaveStyle::Weak => ValueKind::Weak,
 
             WaveStyle::Color(c) => ValueKind::Custom(c),
-            WaveStyle::Var(..) => unreachable!(),
+            WaveStyle::Var(..) => {
+                error!("wavestyle var was not translated!");
+                unreachable!()
+            },
         }
     }
     fn replace_wavestyles(&mut self, conf:&mut Config) {
