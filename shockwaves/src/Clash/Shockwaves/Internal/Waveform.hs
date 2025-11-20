@@ -294,9 +294,10 @@ instance (WaveformG (a k), WaveformG (b k)) => WaveformG ((a :+: b) k) where
   splitG r (R1 y) = splitG r y
 
   addTypesG = addTypesG @(a k) . addTypesG @(b k)
-  addValueG xy = safeWHNFOr id $ case xy of
-    (L1 x) -> addValueG x
-    (R1 y) -> addValueG y
+  addValueG xy = case safeWHNF xy of
+    Just (L1 x) -> addValueG x
+    Just (R1 y) -> addValueG y
+    Nothing     -> id
   hasLUTG = hasLUTG @(a k) || hasLUTG @(b k)
 
   widthG = undefined

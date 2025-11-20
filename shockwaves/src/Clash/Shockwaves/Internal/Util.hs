@@ -79,13 +79,13 @@ safeVal x = unsafeDupablePerformIO $ catch
   (\(XException e) -> return $ Left (Just e))
 
 -- | Evaluate to WHNF. If this fails, return a default value.
-safeWHNFOr :: a -> a -> a
-safeWHNFOr dflt x = unsafeDupablePerformIO $ catch
+safeWHNF :: a -> Maybe a
+safeWHNF x = unsafeDupablePerformIO $ catch
   (   evaluate . unsafeDupablePerformIO
-    $ catch (evaluate x)
+    $ catch (evaluate (x `seq` Just x))
             (\(_::SomeException) ->
-              return dflt))
-  (\(XException _e) -> return dflt)
+              return Nothing))
+  (\(XException _e) -> return Nothing)
 
 
 applySpacer :: NumberSpacer -> Value -> Value
