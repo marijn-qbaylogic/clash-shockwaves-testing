@@ -444,13 +444,13 @@ dumpVCD## (offset, cycles) (signalMap,typeMap,traceMap) now
       (flattenMap periodMap)
 
   periods'    = map (`quot` timescale) periods
-  valuess'    = map slice $ zipWith normalize  periods' valuess
-  addValuess' = map slice $ zipWith normalize' periods' addValuess
+  valuess'    = map slice $ zipWith normalize periods' valuess
+  addValuess' = map slice $ zipWith normalize periods' addValuess
   
   normalize  period (v:values)    = v: concatMap (replicate period) values
   normalize  _      []            = []
-  normalize' period (a:addValues) = a: concatMap (\x -> x : replicate (period-1) id) addValues
-  normalize' _      []            = []
+--   normalize' period (a:addValues) = a: concatMap (\x -> x : replicate (period-1) id) addValues
+--   normalize' _      []            = []
   slice :: [a] -> [a]
   slice values = drop offset $ take cycles values
 
