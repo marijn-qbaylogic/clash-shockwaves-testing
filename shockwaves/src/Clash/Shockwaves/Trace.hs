@@ -538,7 +538,7 @@ dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
       (flattenMap periodMap)
 
   periods'    = map (`quot` timescale) periods
-  valuess'    = map slice        $ zipWith normalize  periods' valuess
+  valuess'    = map slice $ zipWith normalize periods' valuess
   addValuess' = map (fmap slice) $ zipWith normalize' periods' addValuess
   
   -- Copy values, but only copy LUT add function once.
@@ -546,9 +546,10 @@ dumpVCD## (start, stop) startDelay clocks (signalMap,typeMap,traceMap) now
        replicate (startDelay'+1) v
     <> concatMap (replicate period) values
   normalize  _      []            = []
+
   normalize' period (Just (a:addValues)) =
     Just $    replicate (startDelay'+1) a
-           <> concatMap (\x -> x : replicate (period-1) id) addValues
+           <> concatMap (replicate period) addValues
   normalize' _      _             = Nothing
 
   slice :: [a] -> [a]
