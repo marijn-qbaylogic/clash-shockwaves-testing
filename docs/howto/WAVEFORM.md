@@ -29,7 +29,7 @@ in the last section.
 
 TODO
 
-
+#### Constant values
 If you have a constant value (such as a unit type or a constructor without fields), use
 `TConst`. This is simply a constant translation value.
 
@@ -37,6 +37,7 @@ If you have a constant value (such as a unit type or a constructor without field
 Translator 0 $ TConst $ Translation (Just (TODO,TODO,TODO)) [("sub",Translation (Just (TODO,TODO,TODO)) [])]
 ```
 
+#### Sum types
 If you have multiple constructors (a sum type), use `TSum`. This will by default not create
 any subsignals, so you'll likely want to use `TDuplicate` for all subtranslators.
 ```hs
@@ -58,60 +59,122 @@ translator = Translator width $ TSum
 
 > **Note:** The sum translator will consume $clog(|translators|)$ bits.
 
+
+#### Product types
 Next, if a constructor has fields (a product type), you can use `TProduct`.
 This translator has a lot of options.
 
 ```hs
 translator = Translator width $ TProduct
-  { TODO 
-  , TODO
+  { subs
+  , start, sep, stop,
+  , labels
+  , preci, preco
+  , style
   }
 ```
 
+`subs` is a list of translators. If no subsignal name is provided, they will be used,
+and will consume bits, but will not be shown as a subsignal.
+
+`start`, `sep` and `stop` are used to attach subsignal values together. If `labels`
+is not empty, the values will be inserted before each subtranslator value - this is
+often used for record-like data.
+```
+<start> <sub[0]> <sep> <sub[1]> <stop>
+<start> <labels[0]> <sub[0]> <sep> <labels[1]> <sub[1]> <stop>
+```
+For example, a Haskell list would have `start="[",sep=",",stop="]",labels=[]` while
+a record might look like `start="MyRecord{",sep=",",stop="}",labels=["field1=","field2=]`.
+
+`preci` and `preco` denote the inner and outer operator precedence respectively. The precedence of the
+subvalue translation is compared to the inner prescedence, and if this inner precedence is equal or higher,
+the subvalue is wrapped in parentheses. The outer precedence is used for the final translation.
+If your data type is joined using spaces (as is often the case), set both to `10`.
+For custom operators, just use the operator precedence for both.
+If values never need parentheses, use `preci=0` and `preco=11`.
+In a case like `fromList [<sub[0]>,<sub[1]>]` you'd want to use `preco=10` (because the value is joined by a space)
+but `preci=0` (since the list syntax isolates the subvalues, so they never need parentheses).
+
+
+`style` is the index of the translator whose style should be copied. Setting this
+to `-1` will make the value have the default style. This is mostly useful for wrapper types
+- by default, types that look like newtypes will copy the style of their subvalue so that
+these styles become visible at a higher level in the signal hierarchy.
+
+
+#### Arrays
 If your datatype looks more like a homogeneous list, you'll likely want to use `TArray`
 instead. It is basically a reduced version of `TProduct` that has a single subtype
 and numbered subsignals.
 
-TODO
+```hs
+translator = Translator width $ TArray
+  { sub, len
+  , start, sep, stop
+  , preci, preco
+  }
+```
 
-If you need to reference a different translator, you can use `TRef`. Instead of
-manually creating this value, use the `tRef` function to create the full translator:
+Here `sub` is a single translator, and `len` is the number of elements in the array.
+The other fields all have the same functionality as they have in `TProduct`.
+
+#### Other types
+If you have a subvalue that needs to be translated, do not include its full translator,
+but include a reference to the type using `TRef`. Instead of manually creating this value,
+use the `tRef` function to create the full translator:
 ```hs
 translator = tRef (Proxy @MyType)
 ```
 
+#### Numbers
 `TNumber` is used to translate integer types. It is used as `TNumber{format,spacer}`,
-and more info about its behaviour can be found in [TODO:link].
+and more info about its behaviour can be found [here](NUMBER.md).
 
+#### Lookup tables
 `TLut` is used for LUT based types, and unless you _really_ know what you are doing,
 you should not touch this translator.
 
-
+#### Creating custom translator configurations
 Although the translators must still process the bits correctly, a lot of
 configuration is possible. For example, `Maybe a` would by default get a translator
 like this:
 
 ```hs
-translator = Translator _ $ TSum
-  [ tDup "Nothing" $ Translator 0 $ TConst $ Translation (Just ("Nothing",_,_)) []
-  , tDup "Just" $ Translator _ $ TProduct
-      { start = "Just "
-      , subs = [(Just "0", tRef (Proxy @a))]
-      , ... }]
+translator = Translator (width @(Maybe a)) $ TSum
+  [ tDup "Nothing" $ Translator 0 $ TConst $ Translation (Just ("Nothing",_,11)) []
+  , tDup "Just" $ _ $ TProduct
+      { subs = [(Just "0", tRef (Proxy @a))] 
+      , start = "Just ", sep = "", stop = "", labels = []
+      , preci = 10, preco = 10
+      , style = 0 }]
+```
+
+Corresponding to the following structure:
+```
+signal     |⟨ Nothing ⟩⟨ Just True ⟩
+|- Nothing |⟨ Nothing ⟩
++- Just    |          ⟨ Just True ⟩
+   +- 0    |          ⟨ True      ⟩
 ```
 
 But instead, to reduce unnecessary subsignal clutter, it looks like this:
 
 ```hs
 translator = Translator _ $ TSum
-  [ Translator 0 $ TConst $ Translation (Just ("Nothing",_,_)) []
-  , Translator _ $ TProduct
-      { start = "Just "
-      , subs = [(Just "Just.0", tRef (Proxy @a))]
-      , ... }]
+  [ Translator 0 $ TConst $ Translation (Just ("Nothing","$maybe_nothing",11)) []
+  , Translator (width @a) $ TProduct
+      { subs = [(Just "Just.0", tRef (Proxy @a))] 
+      , start = "Just ", sep = "", stop = "", labels = []
+      , preci = 10, preco = 10
+      , style = 0 }]
 ```
 
-
+This shows up as:
+```
+signal    |⟨ Nothing ⟩⟨ Just True ⟩
++- Just.0 |           ⟨ True      ⟩
+```
 
 
 ### TRANSLATION
@@ -187,3 +250,10 @@ addValue x = addValue (getA x) . addValue (getB x)
 -- Note: `addValue (Cons a b) = addValue a . addValue b` fails for `undefined`
 ```
 
+
+
+
+
+That's it! For some specific purposes of creating custom `Waveform` instances, see:
+- [How to implement Waveform for GADTs](GADTS.md)
+- [How to add extra information to your data types](EXTRA_INFO.md)
