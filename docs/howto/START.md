@@ -57,7 +57,7 @@ main = do
 If we now run the `main` function, we get the files `waveform.vcd` and `waveform.json`. Opening the
 VCD file in Surfer, this is what the result looks like:
 
-![counter signal: 0, 500, 1_000, 1_500, ...](setup/unsigned.png)
+![counter signal: 0, 500, 1_000, 1_500, ...](start/unsigned.png)
 
 Though it may not look like much, the underscores show we are indeed looking at a Shockwaves translation!
 
@@ -113,18 +113,22 @@ data Led = Red | Green | Blue
 ```
 and run the code again, it should now compile and run. Opening the file in `Surfer`, we see:
 
-![signal showing Red, Green, Blue with subsignals for each constructor](setup/disco.png)
+![signal showing Red, Green, Blue with subsignals for each constructor](start/disco.png)
 
 That's it! Using this method, you can trace _almost_ all data types.
 
 In cases where such a derivation fails, you might want to use one of the following resources:
-- [How to write a custom Waveform instance] (WAVEFORM.md)
-- GADTS [TODO:link]
-- Numbers [TODO:link]
-- Constant values [TODO:link]
-- Difficult to translate values [TODO:link]
+- [How to implement Waveform for constant value types](CONSTANT.md)
+- [How to implement Waveform for integer-like types](NUMBER.md)
+- [How to write a custom Waveform instance](WAVEFORM.md)
+- [How to implement Waveform for GADTs](GADTS.md)
+- [How to add translations for difficult to unpack types](LUTS.md)
 
 If you want to customize the behaviour, you can use one of these resources:
-- [Using styles](STYLES.md)
-- [Shockwaves configuration](CONFIG.md)
-- [Adding extra information](EXTRA_INFO.md)
+- [How to use colors to improve clarity](STYLES.md)
+- [How to add extra information to your data types](EXTRA_INFO.md)
+
+Some other things you can do with Shockwaves:
+- [How to add clock and other domain signals](DOMAINS.md)
+- [How to customize Shockwaves behaviour](CONFIG.md)
+
