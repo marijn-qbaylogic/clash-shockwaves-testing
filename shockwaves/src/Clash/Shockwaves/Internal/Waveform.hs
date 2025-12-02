@@ -225,13 +225,13 @@ class WaveformG a where
 
 
 
--- void type (assuming it has a csutom bitpack implementation)
+-- void type (assuming it has a custom bitpack implementation)
 instance WaveformG (D1 m1 V1 k) where
   translateG _ _ = Translation Nothing []
   translatorG _ _ = Translator 0 $ TConst $ Translation Nothing []
 
   translateAllG = undefined
-  translatorsG = undefined
+  translatorsG _ = []
 
   splitG _ _ = []
 
@@ -332,7 +332,7 @@ instance (WaveformG (fields k), KnownSymbol name)
         , style  = if L.length subs == 1 then 0 else -1
         }
 
-  translateAllG = undefined
+  translateAllG x = translateAllG $ unM1 x
   translatorsG sty =
     [   (sym @name, tDup (sym @name)
       $ translatorG @(C1 (MetaCons name fix True) fields k) undefined sty)]
@@ -395,7 +395,7 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
       sname = safeName (sym @name)
       isOperator = not (isAlpha . L.head $ sym @name) && (L.length subs == 2)
 
-  translateAllG = undefined
+  translateAllG x = enumLabel $ translateAllG $ unM1 x
   translatorsG sty =
     [   (sym @name, tDup (sym @name)
       $ translatorG @(C1 (MetaCons name fix False) fields k) undefined sty)]
@@ -519,7 +519,8 @@ class (Typeable a, BitPack a) => WaveformLUT a where
   translateL x = Translation ren subs
     where
       ren = safeValOr (renError "undefined") $ displayL x
-      subs = safeValOr [] $ splitL ren x
+      subs = safeValOr [] $
+             splitL ren x
 
   -- | Create subsignal translations of a value from that value and its toplevel render.
   --
