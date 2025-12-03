@@ -1,12 +1,8 @@
 
 ## How to customize Shockwaves behaviour
-- config files
-- error prop
-- number spacers
-- styles
-
 It is possible to further communicate the behaviour of Shockwaves through
-the use of configuration files.
+the use of configuration files. This guide shows you how to set up the configuration
+files and their options.
 
 ### SETTING UP CONFIG FILES
 The first step is to create configuration files.
@@ -16,8 +12,9 @@ Surfer extensions, and the folder that VCD files are opened in.
 To find the global configuration folder, simply look at the logging output of
 Surfer:
 ```
-shockwaves log TODO
+SHOCKWAVES: Looking for global config file: C:/Users/Me/AppData/Roaming/surfer-project/surfer/config/translators/shockwaves.toml
 ```
+TODO: correct path
 
 In either of these directories, you simply need to create a file called `shockwaves.toml`.
 If the file is found, the logs will look something like this:
@@ -27,7 +24,7 @@ TODO LOG OUTPUT
 ```
 
 The following sections explain how to add settings. Keep in mind that local settings
-overwrite global settings. A template configuration file can be found here [TODO:link].
+overwrite global settings. A template configuration file can be found [here](config/shockwaves.toml).
 
 ### ERROR PROPAGATION
 

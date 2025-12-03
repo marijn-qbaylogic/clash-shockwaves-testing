@@ -27,7 +27,28 @@ in the last section.
 
 ### TRANSLATOR
 
-TODO
+The most important function of `Waveform` is `translator`: this specifies the `Translator`
+that the waveform viewer should use to unpack and translate the binary values in the VCD
+file. We will discussed it later, but first, let's make sure the translator can be used.
+
+The translator is registered by `addTypes`. By default, this function adds the type
+itself to the type map, and then calls `addSubtypes`, and does not need modification.
+`addSubtypes` then has to register all subtypes in the data type. This is fairly simple.
+For example, given:
+```hs
+data MyType c = P A | Q B c
+```
+the implementation looks like:
+```hs
+addSubtypes = addSubtypes @A . addSubtypes @B . addSubtypes @c
+```
+
+Now we can implement `translator`, which needs to produce a `Translator` value.
+A `Translator` consists of two values: a width, denoting the number of bits the translator
+is expected to receive, and a a `TranslatorVariant` that actually describes how these bits
+are to be interpreted. There are many variants to choose from which are discussed below.
+
+
 
 #### Constant values
 If you have a constant value (such as a unit type or a constructor without fields), use
@@ -152,10 +173,10 @@ translator = Translator (width @(Maybe a)) $ TSum
 
 Corresponding to the following structure:
 ```
-signal     |⟨ Nothing ⟩⟨ Just True ⟩
-|- Nothing |⟨ Nothing ⟩
-+- Just    |          ⟨ Just True ⟩
-   +- 0    |          ⟨ True      ⟩
+signal     |{ Nothing }{ Just True }
+|- Nothing |{ Nothing }
++- Just    |           { Just True }
+   +- 0    |           { True      }
 ```
 
 But instead, to reduce unnecessary subsignal clutter, it looks like this:
@@ -172,10 +193,13 @@ translator = Translator _ $ TSum
 
 This shows up as:
 ```
-signal    |⟨ Nothing ⟩⟨ Just True ⟩
-+- Just.0 |           ⟨ True      ⟩
+signal    |{ Nothing }{ Just True }
++- Just.0 |           { True      }
 ```
 
+In general, the translators `TDuplicate` and `TStyled` can be inserted or removed
+freely, since they do not influence how bits are interpreted, as can all styles and
+precedence and text values.
 
 ### TRANSLATION
 
@@ -192,7 +216,7 @@ TODO
 
 
 
-### LUTS
+### LUT CREATION
 
 `hasLUT` indicates whether there are any data types inside that need to be translated
 and added to a LUT.
@@ -250,8 +274,11 @@ addValue x = addValue (getA x) . addValue (getB x)
 -- Note: `addValue (Cons a b) = addValue a . addValue b` fails for `undefined`
 ```
 
-
-
+To avoid splitting values unnecessarily, if it is unknown whether subvalues use luts,
+`addValue` is usually implemented as:
+```hs
+addValue x = if hasLUT @(MyType a b) then ... else id
+```
 
 
 That's it! For some specific purposes of creating custom `Waveform` instances, see:
