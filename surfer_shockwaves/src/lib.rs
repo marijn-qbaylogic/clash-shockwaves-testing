@@ -916,7 +916,7 @@ pub fn new() -> FnResult<()> {
 
     // rewrite: set conf dir, read global conf.
 
-    let dir = unsafe{conf_dir(())};
+    let dir = unsafe{config_dir(())};
     if let Ok(Json(Some(dir))) = dir {
         let dir = Utf8PathBuf::from(&dir);
         info!("SHOCKWAVES: Config dir: {dir:?}");
@@ -1086,6 +1086,6 @@ fn read_style_file(file:String) -> Option<Table> {
 extern "ExtismHost" {
     pub fn read_file(filename: String) -> Vec<u8>;
     pub fn file_exists(filename: String) -> bool;
-    pub fn conf_dir(_user_data: ()) -> Json<Option<String>>;
+    pub fn config_dir(_user_data: ()) -> Json<Option<String>>;
 }
 
