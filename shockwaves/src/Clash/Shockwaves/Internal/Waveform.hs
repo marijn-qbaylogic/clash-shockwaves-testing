@@ -38,6 +38,9 @@ import Numeric (showInt, showHex, showOct, showBin)
 -- import Data.Maybe (fromMaybe)
 -- import Clash.Sized.Internal.BitVector (xToBV)
 
+-- | Get a 'Translation' from a 'Value' using 'WSNormal' and prescedence 11.
+tFromVal :: Value -> Translation
+tFromVal v = Translation (Just (v,WSNormal,11)) []
 
 
 -- | Wrap a 'Translator' in a 'TStyled' translator using some style, unless the
@@ -225,13 +228,13 @@ class WaveformG a where
 
 
 
--- void type (assuming it has a csutom bitpack implementation)
+-- void type (assuming it has a custom bitpack implementation)
 instance WaveformG (D1 m1 V1 k) where
   translateG _ _ = Translation Nothing []
   translatorG _ _ = Translator 0 $ TConst $ Translation Nothing []
 
   translateAllG = undefined
-  translatorsG = undefined
+  translatorsG _ = []
 
   splitG _ _ = []
 
@@ -263,7 +266,7 @@ instance (WaveformG (C1 m2 s k), WaveformG (s k)) => WaveformG (D1 m1 (C1 m2 s) 
 -- multiple constructors type
 instance WaveformG ((a :+: b) k) => WaveformG (D1 m1 (a :+: b) k) where
   translateG sty = translateAsSumG sty . unM1
-  translatorG w sty = Translator w . TSum $ L.map snd $ translatorsG @((a :+: b) k) sty
+  translatorG w sty = Translator w . TSum $ L.map snd $ translatorsG @((a :+: b) k) sty -- TODO: bug? shouldn't this include a tDup?
 
   translateAllG = undefined
   translatorsG = undefined
@@ -314,7 +317,7 @@ instance (WaveformG (fields k), KnownSymbol name)
   translateG sty x = translateFromSubs
     (translatorG @(C1 (MetaCons name fix True) fields k) undefined sty)
     (translateAllG $ unM1 x)
-  translateAsSumG sty x = Translation ren [(sym @name, t)]
+  translateAsSumG sty x = Translation ren [(sym @name, t)] -- TODO: use function
     where t = translateG sty x
           Translation ren _ = t
   translatorG _ sty = t'
@@ -332,12 +335,12 @@ instance (WaveformG (fields k), KnownSymbol name)
         , style  = if L.length subs == 1 then 0 else -1
         }
 
-  translateAllG = undefined
+  translateAllG x = translateAllG $ unM1 x
   translatorsG sty =
     [   (sym @name, tDup (sym @name)
       $ translatorG @(C1 (MetaCons name fix True) fields k) undefined sty)]
 
-  splitG r x = [(sym @name, Translation r $ translateAllG $ unM1 x)]
+  splitG r x = [(sym @name, Translation r $ translateAllG $ unM1 x)] -- TODO: point to own translateAllG?
 
   addTypesG = addTypesG @(fields k)
   addValueG x = addValueG (unM1 x)
@@ -357,7 +360,7 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
   translateG sty x = translateFromSubs --safe?
     (translatorG @(C1 (MetaCons name fix False) fields k) undefined sty)
     (enumLabel $ translateAllG $ unM1 x)
-  translateAsSumG sty x = Translation ren [(sym @name, t)]
+  translateAsSumG sty x = Translation ren [(sym @name, t)] -- TODO: use function
     where t = translateG sty x
           Translation ren _ = t
 
@@ -395,7 +398,7 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
       sname = safeName (sym @name)
       isOperator = not (isAlpha . L.head $ sym @name) && (L.length subs == 2)
 
-  translateAllG = undefined
+  translateAllG x = enumLabel $ translateAllG $ unM1 x
   translatorsG sty =
     [   (sym @name, tDup (sym @name)
       $ translatorG @(C1 (MetaCons name fix False) fields k) undefined sty)]
@@ -519,7 +522,8 @@ class (Typeable a, BitPack a) => WaveformLUT a where
   translateL x = Translation ren subs
     where
       ren = safeValOr (renError "undefined") $ displayL x
-      subs = safeValOr [] $ splitL ren x
+      subs = safeValOr [] $
+             splitL ren x
 
   -- | Create subsignal translations of a value from that value and its toplevel render.
   --
@@ -806,6 +810,7 @@ instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a
 
 instance WaveformConst () where
   constRen = Just ("()",WSNormal,11)
+deriving via WaveformForConst () instance Waveform ()
 
 instance Waveform Bool where
   translator = Translator 1 $ TSum
