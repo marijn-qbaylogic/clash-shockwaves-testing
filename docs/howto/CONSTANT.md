@@ -1,7 +1,5 @@
 ## How to implement Waveform for constant value types
 
-TODO
-
 Sometimes, it's easiest to just assign a constant value to a signal. This might be the case if you have a unit type, or
 if actual translation is both difficult and not really necessary.
 
@@ -9,7 +7,11 @@ It is very simple to add a constant translator. Just create a `TConst` translato
 any subsignal hierarchy will be inferred automatically:
 
 ```hs
-myTranslator = TConst <translation>
+import Clash.Shockwaves.Waveform
+myTranslator = TConst $
+  Translation (Just ("value",WSNormal,11))
+    [("subsignal",
+      Translation (Just ("sub",WSNormal,11)) [] )]
 ```
 
 However, it is still a bit tedious to implement full `Waveform` instances this way.
@@ -20,16 +22,20 @@ Say you only need a single signal, like `()`. In that case, you only need to pro
 
 
 ```hs
+import Clash.Shockwaves.Waveform
 instance WaveformConst () where
   constRen = Just ("()",WSNormal,11)
+deriving via WaveformForConst () instance Waveform ()
 ```
 
 Should you need a full translation, you should overwrite `constTrans` instead. The subsignal structure is automatically inferred from
 this translation:
 
 ```hs
+import Clash.Shockwaves.Waveform
 instance WaveformConst MyType where
-  constTrans = Translation Nothing [("subsignal",Translation Nothing [])]
+  constTrans = <translation>
+deriving via WaveformForConst MyType instance Waveform MyType
 ```
 
 
