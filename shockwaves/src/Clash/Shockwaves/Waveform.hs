@@ -19,7 +19,7 @@ module Clash.Shockwaves.Waveform (
   Structure(..),
   structure,
   NumberFormat(..),
-  WaveformForConst(..),
+  WaveformConst(..),WaveformForConst,
   WaveformForNumber(..),
   DecSpacer,HexSpacer,OctSpacer,BinSpacer,NoSpacer,
 ) where
