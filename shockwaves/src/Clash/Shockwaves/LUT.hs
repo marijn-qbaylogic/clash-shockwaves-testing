@@ -15,7 +15,8 @@ module Clash.Shockwaves.LUT (
   Prec,
   Structure(..),
   SubSignal,
-  structure
+  structure,
+  tFromVal
 ) where
 
 import Clash.Shockwaves.Internal.Types

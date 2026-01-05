@@ -38,6 +38,9 @@ import Numeric (showInt, showHex, showOct, showBin)
 -- import Data.Maybe (fromMaybe)
 -- import Clash.Sized.Internal.BitVector (xToBV)
 
+-- | Get a 'Translation' from a 'Value' using 'WSNormal' and prescedence 11.
+tFromVal :: Value -> Translation
+tFromVal v = Translation (Just (v,WSNormal,11)) []
 
 
 -- | Wrap a 'Translator' in a 'TStyled' translator using some style, unless the
@@ -263,7 +266,7 @@ instance (WaveformG (C1 m2 s k), WaveformG (s k)) => WaveformG (D1 m1 (C1 m2 s) 
 -- multiple constructors type
 instance WaveformG ((a :+: b) k) => WaveformG (D1 m1 (a :+: b) k) where
   translateG sty = translateAsSumG sty . unM1
-  translatorG w sty = Translator w . TSum $ L.map snd $ translatorsG @((a :+: b) k) sty
+  translatorG w sty = Translator w . TSum $ L.map snd $ translatorsG @((a :+: b) k) sty -- TODO: bug? shouldn't this include a tDup?
 
   translateAllG = undefined
   translatorsG = undefined
@@ -314,7 +317,7 @@ instance (WaveformG (fields k), KnownSymbol name)
   translateG sty x = translateFromSubs
     (translatorG @(C1 (MetaCons name fix True) fields k) undefined sty)
     (translateAllG $ unM1 x)
-  translateAsSumG sty x = Translation ren [(sym @name, t)]
+  translateAsSumG sty x = Translation ren [(sym @name, t)] -- TODO: use function
     where t = translateG sty x
           Translation ren _ = t
   translatorG _ sty = t'
@@ -337,7 +340,7 @@ instance (WaveformG (fields k), KnownSymbol name)
     [   (sym @name, tDup (sym @name)
       $ translatorG @(C1 (MetaCons name fix True) fields k) undefined sty)]
 
-  splitG r x = [(sym @name, Translation r $ translateAllG $ unM1 x)]
+  splitG r x = [(sym @name, Translation r $ translateAllG $ unM1 x)] -- TODO: point to own translateAllG?
 
   addTypesG = addTypesG @(fields k)
   addValueG x = addValueG (unM1 x)
@@ -357,7 +360,7 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
   translateG sty x = translateFromSubs --safe?
     (translatorG @(C1 (MetaCons name fix False) fields k) undefined sty)
     (enumLabel $ translateAllG $ unM1 x)
-  translateAsSumG sty x = Translation ren [(sym @name, t)]
+  translateAsSumG sty x = Translation ren [(sym @name, t)] -- TODO: use function
     where t = translateG sty x
           Translation ren _ = t
 
