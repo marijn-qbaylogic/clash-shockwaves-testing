@@ -15,32 +15,39 @@ data Instr = Add | Sub | Mul | Div
 ### PICKING A WAVESTYLE
 There are a number of standard styles to pick from, corresponding to different
 VCD value types:
-- ...
-- ...
-- ...
+- `WSNormal`: The default.
+- `WSWarn`: A warning.
+- `WSError`: An error. This looks the same as `WSWarn`, but is propagated upwards through the hierarchy.
+- `WSUndef`: An undefined value. Looks the same as `WSError` and `WSUndef`.
+- `WSHighImp`: A high impedance value.
+- `WSDontCare`: A value that does not matter.
+- `WSWeak`: A weakly driven value.
 
 ```hs
+import Clash.Shockwaves.Waveform
 style = WSWarn
 ```
 
-These will change with the selected theme. However, these do not seem to include
-exactly the colors we want, so we are better off using a custom style:
+The actual appearance of these styles will change depending on your selected Surfer theme.
+However, these do not include the exact colors we want, we are better off using a custom style:
 
 - `WSColor c`
 
 There are multiple ways of creating a color value. First of all, you can directly
 specify the color as an 8-bit RGB value:
 ```hs
+import Clash.Shockwaves.Style
 style = WSColor (RGB 255 0 0)
 ```
 
-It is also possible to use the predefined colors in `Data.Colour.???TODO`, which is exported
-in `Clash.Shockwaves.Style.???TODO`, but since these are defined using real values,
+It is also possible to use the predefined colors in `Data.Colour.Names`, which is exported
+in `Clash.Shockwaves.Style.Colors`, but since these are defined using real values,
 they need to be converted first. You can make a `WaveStyle` directly using the `wsColor`
 function:
 
 ```hs
-import ...
+import Clash.Shockwaves.Style
+import Clash.Shockwaves.Style.Colors (red)
 style = wsColor red
 ```
 
@@ -48,26 +55,29 @@ Alternatively, when using `OverloadedStrings`, you can specify the color name as
 directly:
 
 ```hs
-{OverloadedStrings}
-import ...
+{-# LANGUAGE OverloadedStrings #-}
+import Clash.Shockwaves.Waveform
 style = "red"
 ```
 
 It is also possible to specify the string as a hexadecimal value:
 ```hs
-{OverloadedStrings}
+{-# LANGUAGE OverloadedStrings #-}
+import Clash.Shockwaves.Waveform
 style = "#f00"
 ```
 
-Finally, it is possible to use _style variables_ in a configuration file (see [TODO:link]).
+Finally, it is possible to use _style variables_ that are defined in a configuration file (see [this guide](CONFIG.md)).
 If the variable cannot be found, the second argument (default value) is used.
 ```hs
+import Clash.Shockwaves.Waveform
 style = WSVar "myRed" $ WSWarn
 ```
 It is also possible to get a variable from a string, in which case `WSNormal` is taken
 as the default value:
 ```hs
-{OverloadedStrings}
+{-# LANGUAGE OverloadedStrings #-}
+import Clash.Shockwaves.Waveform
 style = "$myRed"
 ```
 
@@ -83,7 +93,7 @@ to the default derivation of `Waveform`. All we need to do is create a `Waveform
 instance and overwrite the `styles` list:
 
 ```hs
-data Instr = ...
+data Instr = Add | Sub | Mul | Div deriving (...)
 instance Waveform Instr where
   styles = ["green", wsColor red, "#11f", WSColor (RGB 100 0 255)]
 ```
