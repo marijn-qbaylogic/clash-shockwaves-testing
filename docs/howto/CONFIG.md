@@ -12,15 +12,15 @@ Surfer extensions, and the folder that VCD files are opened in.
 To find the global configuration folder, simply look at the logging output of
 Surfer:
 ```
-SHOCKWAVES: Looking for global config file: C:/Users/Me/AppData/Roaming/surfer-project/surfer/config/translators/shockwaves.toml
+SHOCKWAVES: Looking for global config file: Looking for global config file: /home/marijn/.config/surfer/translators/shockwaves.toml
 ```
-TODO: correct path
 
-In either of these directories, you simply need to create a file called `shockwaves.toml`.
-If the file is found, the logs will look something like this:
+A similar message appears indicating the local directory whenever a file is opened. 
+In either of these directories, create a file called `shockwaves.toml`.
+If the file is found and readable, the logs will look something like this:
 
 ```
-TODO LOG OUTPUT
+ INFO extism::pdk: SHOCKWAVES: Parsed config file
 ```
 
 The following sections explain how to add settings. Keep in mind that local settings
@@ -93,16 +93,18 @@ In `either_normal.toml`, we can define both values to be normal:
 either_left = "N"
 either_right = "N"
 ```
-Using "...TODO...", you can use any of the standard styles for ...TODO... .
 
-(the default style variables are `either_left`, `either_right`, `bool_true`, `bool_false` and `maybe_nothing`)
+> Using `"NORMAL"`/`"N"`, `"WARN"`/`"W"`, `"ERROR"`/`"E"`, `"UNDEF"`/`"U"`, `"HIGHIMP"`/`"Z"` `"WEAK"`/`"Q"`, `"DONTCARE"`/`"X"`,
+you can use any of the standard styles.
+> 
+> The default style variables are `either_left`, `either_right`, `bool_true`, `bool_false` and `maybe_nothing`.
 
 Actually, let's give them slightly different colors - not something that screams
 "bad" and "good", but something different nonetheless. We can write colors using hexadecimal values:
 
 ```t
-either_left  = "#007600ff"
-either_right = "#43ba43ff"
+either_left  = "#007600"
+either_right = "#43ba43"
 ```
 
 Now, in `either_result.toml`, we can define some other colors. But let's make
@@ -151,9 +153,6 @@ magenta. Really, anything is possible.
 ```t
 var = ["$var1","$var2","#f0f"]
 ```
-
-
-TODO: add some default config files that are useful
 
 > **Note:** Style files are reread whenever a VCD file is opened, and so is the
 > local configuration file. The global configuration file, however, is not;

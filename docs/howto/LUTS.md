@@ -28,7 +28,7 @@ and the translations of subsignals.
 > a LUT instance, be aware of these properties.
 
 
-### Changing a value
+### CHANGING THE RENDER VALUE
 
 ```hs
 idk some example TODO
@@ -67,7 +67,7 @@ instance WaveformLUT MyColor where
   styleL (MyRGB r g b) = WSColor (RGB r g b)
 ```
 
-### Changing subsignals
+### CHANGING THE SUBSIGNALS
 
 To change the subsignals, you need two things:
 - to define the structure

@@ -212,8 +212,50 @@ precedence and text values.
 > However, if you are writing code that may be used by others, please consider
 > adding the full implementation.
 
-TODO
+TODO - actually, why not make it use pack instead? would suffice in most situations. only LUTs need an actual translation, and those are also safer with (unpack . pack)
 
+
+
+An important tool in translation is `translateFromSubs`. This function takes a translator and a list of
+translated subsignals, and produces the resulting translation. The exact behaviour is as follows:
+
+- `TSum`, `TProduct` and `TArray` take the subsignal translations as the subsignal translations.
+  Note that any subsignal names are ignored.
+- `TConst` ignores any subsignal translations and just returns its constant value.
+- `TRef`, `TLut` and `TNumber` cannot create a translation themselves.
+  The input list must be a single subsignal with name `""`, and is assumed to be the
+  translation of the translator itself.
+- `TStyled` and `TDuplicate` are a kind of 'wrapper' translators. Instead of using the provided
+  translations directly, they call `translateFromSubs` on their subtranslator and then process
+  the result.
+
+Let us look at an example data type:
+
+```hs
+data P = A | B Int Int
+```
+
+with a translator structure that looks like:
+
+```
+1) TSum
+2)   TDuplicate
+3)     TConst "A"
+4)   TDuplicate
+5)     TProduct "B"
+6)       TRef Int
+7)       TRef Int
+```
+
+you can render the translation value of 6 and 7 by providing their translations (which changes nothing),
+4 and 5 by providing the translations of 6 and 7,
+2 and 3 by providing nothing,
+and 1 by providing the translation of 2 or 4.
+
+Behind the scenes, this function is mostly used to render `TSum` and `TProduct` without having to deal with
+the prescence of `TDuplicate` and `TStyled`.
+
+> Note that `translateFromSubs` is currently in `Clash.Shockwaves.Internal.Translator`, which is subject to change.
 
 
 ### LUT CREATION
