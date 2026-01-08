@@ -660,7 +660,7 @@ impl Config {
             Some(path.to_string())
         } else {
             //use path relative to config dir
-            self.conf_dir.as_ref().map(|dir|dir.join(&path).into_string())
+            self.conf_dir.as_ref().map(|dir|dir.join("shockwaves/styles").join(&path).into_string())
         };
 
         if let Some(file) = file {
@@ -922,7 +922,7 @@ pub fn new() -> FnResult<()> {
         info!("SHOCKWAVES: Config dir: {dir:?}");
 
         let mut file = dir.clone();
-        file.push("shockwaves.toml");
+        file.push("shockwaves/config.toml");
         let file = file.into_string();
 
         info!("SHOCKWAVES: Looking for global config file: {file}");
