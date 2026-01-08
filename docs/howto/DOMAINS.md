@@ -26,7 +26,9 @@ Alternatively, you can trace a domain with `clockWave`:
 advancedDumpVCD 0 100 5 False signal [clockWave @System "clk"] []
 ```
 
-TODO:image
+The resulting waves look like standard 50% duty cycle clock waves:
+
+[square waves clkA and clkB with different periods](cre/clockwaves.png)
 
 ### SHOCKWAVES CLOCK/RESET/ENABLE SIGNALS
 
@@ -36,23 +38,21 @@ They each return these inputs, so you can use them wherever a clock, reset or en
 Alternatively, they can be forcefully evaluated using e.g. `seq`:
 
 ```hs
-TODO
+withReset (traceReset "rst" resetGen) myDesign
 ```
 
 ```hs
-TODO
+dumpVCD (...) (traceClock "clk" (clockGen @MyDom) `seq` mysignal) ["mysignal2"]
 ```
-
-
 
 Alternatively, `traceClockResetEnable` takes all three at once (and returns them in a tuple).
 This creates one combined signal that shows the clock, unless the system is disabled or being reset:
 
 ```hs
-TODO
+mySignal' = traceClockResetEnable clk rst en `seq` mySignal
 ```
 
-TODO:image
+[A domain split into clock/reset/enable](cre/domains.png)
 
 > The clock colors can be customized with style variables `clk_a` and `clk_b`.
 > Similarly, the other two can be changed through `reset` and `disabled`.
@@ -64,5 +64,9 @@ These all take an extra argument which is returned unchanged. Evaluating the res
 This makes it easier to add them to a signal with hidden signals:
 
 ```hs
-TODO
+macT s (x,y) = (s',s)
+  where s' = x * y + s
+
+mac :: HiddenClockResetEnable dom  => Signal dom (Int, Int) -> Signal dom Int
+mac = traceHiddenClockResetEnable "mac_CRE" $ mealy macT 0
 ```
