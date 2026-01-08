@@ -103,7 +103,7 @@ Custom implementations are generally ill-advised, but may be needed for GADTs.
 
 -}
 
-class (BitPack a, Typeable a) => Waveform a where
+class (Typeable a) => Waveform a where
   -- | Provide the type name.
   -- Overriding this value is only really useful for derive via strategies.
   typeName :: TypeName
@@ -118,16 +118,16 @@ class (BitPack a, Typeable a) => Waveform a where
   -- and should not be overridden.
   -- To change the translation, override 'translate'' instead.
   translate :: a -> Translation
-  translate x = case safeVal (translate' x) of
-    Right t -> t
-    Left _ -> transError "undefined"
-    -- Left Nothing -> transError "{undefined}"
+  translate x = translateBinary (translator @a) (stringPack x)
     -- Left (Just e) -> transError ("{undefined: "<>e<>"}")
 
-  -- | Translation function that might error for undefined values.
-  translate' :: a -> Translation
-  default translate' :: (Generic a, WaveformG (Rep a ())) => a -> Translation
-  translate' x = translateG (styles' @a) (from x :: Rep a ())
+  -- | Translate a binary string.
+  -- For LUTs, this involves translating the value back to a bitvector and back to the original type.
+  -- For other types, this simply translates the value according to the translator.
+  translateBin :: String -> Translation
+  translateBin = ...
+  -- waveform: translateBinWith (translator @a)
+  -- lut: string -> bitvector -> a -> translation
 
   -- | Register this type and all its subtypes. Do not override.
   addTypes :: TypeMap -> TypeMap
@@ -194,13 +194,6 @@ class WaveformG a where
   -- | Given a bitsize and list of styles for the constructors, provide a translator.
   translatorG :: Int -> [WaveStyle] -> Translator
 
-  -- | Given a list of styles for the constructors, translate a value for a type
-  -- with multiple constructors.
-  translateAsSumG :: [WaveStyle] -> a -> Translation
-  translateAsSumG = undefined
-
-  -- | Given a value, translate all fields.
-  translateAllG :: a -> [(SubSignal,Translation)] -- for :*:
   -- | Given one or more constructors and a list of styles, or one or more fields,
   -- give a list of translators.
   -- For single constructor types, immediately return a list of field translators.
@@ -208,11 +201,16 @@ class WaveformG a where
   -- for :+:  and :*: but also used at a type level to get all field translators
   -- for defining tuples more easily
 
-  -- | Given the render of the toplevel value and the value, create a list of subsignals.
-  -- This means that for types with multiple constructors, the render value is
-  -- copied to a subsignal.
-  splitG :: Render -> a -> [(SubSignal,Translation)]
-  -- used for LUTS. copy the render if there are multiple constructors
+  -- Return a list of translators for constructors; defined for constructors, :+: and types with multiple constructors.
+  constrTranslatorsG :: [WaveStyle] -> [(SubSignal,Translator)]
+  -- Return a list of translators for fields; defined for fields, :*:, constructors, and types with a single constructor.
+  -- Product types are numbered for types and constructors only.
+  fieldTranslatorsG :: [(SubSignal,Translator)]
+
+
+  -- | Given a toplevel render, create a full translation with constructor field translations.
+  -- This is only used for LUTs. Defined for all types, :+: and constructors.
+  addFieldTranslations :: Render -> a -> Translation
 
   -- | Add all subtypes to the type map, recusively.
   addTypesG :: TypeMap -> TypeMap
@@ -223,7 +221,7 @@ class WaveformG a where
   hasLUTG :: Bool
 
   -- | Bitsize of a type. Only used to determine the width of constructors
-  -- (and their fields).
+  -- (and their fields): constructors, :*:, fields.
   widthG :: Int -- for individual constructors
 
 

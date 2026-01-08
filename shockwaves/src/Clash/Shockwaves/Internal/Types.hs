@@ -101,13 +101,15 @@ newtype Structure
 -- translates, as well as a 'TranslatorVariant' that determines the translation algorithm.
 data Translator = Translator Int TranslatorVariant deriving (Show)
 
+type BinTranslatorFunction = String -> Translation
+
 -- | The translation algorithm used.
 data TranslatorVariant
   -- | Use the translator of a different type. Note that the width value of the
   -- 'Translator's should still match. The structure is only used so that the
   -- structure can be reconstructed from the translator alone, and is not
   -- actually stored in the final output.
-  = TRef TypeName Structure
+  = TRef TypeName Structure BinTranslatorFunction
 
   -- | A reference to a lookup table.
   | TLut LUTName Structure

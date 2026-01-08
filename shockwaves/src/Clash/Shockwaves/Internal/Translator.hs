@@ -100,7 +100,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
   TNumber{} -> case subs of
     [("",t)] -> t
     _ -> errorX "Number translators require a custom implementation of Waveform.translate that does not call render"
-  
+
   -- normal
   TSum _ -> case subs of
     [(_,t)] -> t
@@ -161,3 +161,72 @@ structure (Translator _ t) = case t of
    where enumerate = L.zip [(0::Int)..]
   TStyled _ t' -> structure t'
   TDuplicate n t' -> Structure [(n,structure t')]
+
+
+translateBinWith :: Translator -> String -> Translation
+translateBinWith trans@(Translator width variant) bin = case variant of
+  TRef _ _ btf -> btf bin
+  TLut _ _ -> errorX "Can't translate binary data with TLut."
+  TNumber{format,sep} -> Translation (Just (val,WSNormal,11)) []
+    where
+      val = map (applySep sep) $ case format of
+        NFBin -> Just $ bin
+        NFOct -> Just $ map octDigit $ chunksOf 3 extend3
+        NFHex -> Just $ map hexDigit $ chunksOf 4 extend4
+        NFUns -> map show (decodeUns 0 bin)
+        NFDec -> map show (decodeSig bin) --todo: decode, translate, format etc.
+      extend3 = (replicate (2-(n+2)%3) '0') ++ bin
+      extend4 = (replicate (3-(n+3)%4) '0') ++ bin
+      n = length bin
+
+  -- normal
+  TSum subs -> translateFromSubs subTs
+   where
+    subTs = translateBinWith (subs ! v) b'' -- todo: take first clog len bits, switch based on that, then call translateFromSubs
+    v = unsFromBinString b'
+    (b',b'') = splitAt k bin
+    k = clog $ length subs
+
+  TProduct
+    { subs
+    , labels
+    } -> translateFromSubs trans subTs
+    where subTs = enumLabels $ zipWith (,) (labels++repeat "") $ carryFoldl go bin subs -- todo: create subtranslations first
+          go b t@(Translator w _) = let (b',b'') = splitAt w b in (b'',translateBinWith t b')
+  TConst t -> t
+
+  TArray{ sub=sub@(Translator w _) }
+    -> translateFromSubs trans subTs
+    where subTs = enumLabel $ map (("",) . translateBinWith sub) $ chunksOf w bin-- todo: create subtranslations
+
+  -- recursive
+  TStyled sty t -> applyStyle sty $ translateBinWith t bin
+  TDuplicate n t -> Translation ren [(n,t')]
+    where t' = translateBinWith t bin
+          Translation ren _ = t'
+
+carryFoldl :: (a -> b -> (a,c)) -> a -> [b] -> [c]
+carryFoldl f i [] = []
+carryFoldl f i (x:xs) = y:carryFoldl f i' xs
+  where (i,y) = f i x
+
+applySep (0,_) num = num
+applySep (_,"") num = num
+applySep (k,s) num = sign ++ joinWith s parts
+  where
+    (sign,digits) = case num of
+      sign@'-':digits -> (sign,digits)
+      digits          -> (  "",digits)
+    parts = reverse $ map reverse $ chunksOf k $ reverse digits
+
+decodeUns :: Integer -> String -> Maybe Integer
+decodeUns k "" = Just k;
+decodeUns k ('0':r) = decodeUns (k*2) r
+decodeUns k ('1':r) = decodeUns (k*2+1) r
+decodeUns _ _ = Nothing
+
+decodeSig :: String -> Maybe Integer
+decodeSig "" = 0
+decodeSig ('0':r) = decodeUns 0 r
+decodeSig ('1':r) = decodeUns (-1) r
+decodeSig _ = Nothing
