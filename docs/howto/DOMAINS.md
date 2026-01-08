@@ -28,7 +28,7 @@ advancedDumpVCD 0 100 5 False signal [clockWave @System "clk"] []
 
 The resulting waves look like standard 50% duty cycle clock waves:
 
-[square waves clkA and clkB with different periods](cre/clockwaves.png)
+![square waves clkA and clkB with different periods](cre/clockwaves.png)
 
 ### SHOCKWAVES CLOCK/RESET/ENABLE SIGNALS
 
@@ -52,7 +52,7 @@ This creates one combined signal that shows the clock, unless the system is disa
 mySignal' = traceClockResetEnable clk rst en `seq` mySignal
 ```
 
-[A domain split into clock/reset/enable](cre/domains.png)
+![A domain split into clock/reset/enable](cre/domains.png)
 
 > The clock colors can be customized with style variables `clk_a` and `clk_b`.
 > Similarly, the other two can be changed through `reset` and `disabled`.
