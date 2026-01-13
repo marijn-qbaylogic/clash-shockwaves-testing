@@ -12,6 +12,7 @@ Type definitions for Shockwaves.
 
 module Clash.Shockwaves.Internal.Types where
 import Clash.Prelude hiding (sub)
+import Clash.Shockwaves.Internal.BitList (BitList)
 import qualified Data.List as L
 import Data.Map as M
 import Data.Data (Typeable)
@@ -40,8 +41,6 @@ type Prec = Integer
 type Render = Maybe (Value, WaveStyle, Prec)
 -- ^ Rendered value. This can be @Nothing@ is the value does not exists,
 -- or a tuple of the text representation, style, and precedence.
-type BinRep = String
--- ^ Binary representation of a haskell value (like 'BitVector', but arbitrarily sized).
 type LUTName = TypeName
 -- ^ Reference to a LUT.
 
@@ -53,7 +52,7 @@ type TypeMap = Map TypeName Translator
 -- | Table of LUTs. Usually, the index is a type name, but this is not necessarily the case.
 type LUTMap = Map LUTName LUT
 -- | A lookup table of 'Translation's.
-type LUT = Map BinRep Translation
+type LUT = Map BitList Translation
 
 type Color = RGB Word8
 -- ^ The color type used in 'WaveStyle'.
@@ -101,7 +100,11 @@ newtype Structure
 -- translates, as well as a 'TranslatorVariant' that determines the translation algorithm.
 data Translator = Translator Int TranslatorVariant deriving (Show)
 
-type BinTranslatorFunction = String -> Translation
+type BinTranslatorFunction = BitList -> Translation
+
+instance Show BinTranslatorFunction where
+  show _ = "*"
+
 
 -- | The translation algorithm used.
 data TranslatorVariant
@@ -137,7 +140,7 @@ data TranslatorVariant
   --   }
   -- @
   | TProduct
-    { subs          :: [(Maybe SubSignal, Translator)] -- ^ List of fields to translate.
+    { subs          :: [(SubSignal, Translator)] -- ^ List of fields to translate.
     , start        :: Value -- ^ Text to insert at the start of the value.
     , sep          :: Value -- ^ Text to use to separate values.
     , stop         :: Value -- ^ Text to insert at the end of the value.
@@ -204,7 +207,7 @@ instance IsString WaveStyle where
 instance ToJSON Translator where
   toJSON (Translator w v) = object ["w" .= w, "v" .= v']
     where v' = case v of
-                TRef n _ -> object ["R" .= n]
+                TRef n _ _ -> object ["R" .= n]
                 TSum subs -> object ["S" .= toJSON subs]
                 TProduct{subs,start,sep,stop,labels,preci,preco,style} ->
                   object

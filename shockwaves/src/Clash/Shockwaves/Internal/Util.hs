@@ -87,7 +87,7 @@ safeWHNF x = unsafeDupablePerformIO $ catch
               return Nothing))
   (\(XException _e) -> return Nothing)
 
-
+-- | Insert spacers in a values
 applySpacer :: NumberSpacer -> Value -> Value
 applySpacer Nothing v = v
 applySpacer (Just (0,_)) v = v
@@ -98,3 +98,12 @@ applySpacer (Just (n,s)) v = v'
         joinWith (L.reverse s) (L.init chunks) <> "-"
       else
         joinWith (L.reverse s) chunks)
+
+
+-- | Replace empty labels with numbers
+enumLabel :: [(SubSignal,a)] -> [(SubSignal,a)]
+enumLabel = L.zipWith (\i (_,t) -> (show i,t)) [(0::Integer)..]
+
+-- | Create error `Translation`
+errorT :: Value -> Translation
+errorT e = Translation (Just (e,WSError,11)) []

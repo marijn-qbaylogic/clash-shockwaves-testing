@@ -6,7 +6,11 @@ Module exporting the tools required for custom 'WaveformLUT' implementations.
 
 module Clash.Shockwaves.LUT (
   Waveform,
-  WaveformLUT(labelL,styleL,precL,displayL,splitL,structureL),
+  WaveformLUT(structureL,translateL),
+  displaySplit,
+  displayWith, displayShow, displayAtomWith, displayAtom,
+  noSplit, splitG,
+  precL,
   WaveformForLUT(..),
 
   Translation(..),

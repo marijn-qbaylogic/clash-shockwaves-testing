@@ -149,7 +149,7 @@ renderT = testGroup "RENDERED STRING IS CORRECT"
   , testGroup "Maybe" $ renders [ Nothing , Just True , undef     ]
                                 ["Nothing","Just True","undefined"]
   , testGroup "Vec 2" $ renders [ True :> False :> Nil , undef     :> undef     :> Nil , True :> undef            , undef                         ]
-                                ["True :> False :> Nil","undefined :> undefined :> Nil","True :> undefined :> Nil","undefined :> undefined :> Nil"]
+                                ["True :> False :> Nil","undefined :> undefined :> Nil","True :> undefined :> Nil","undefined :> undefined :> Nil"] -- True:>undefined being broken has been fixed in Clash and will start working automatically soon
   , testGroup "Vec 0" $ renders [ Nil @Bool, undef]
                                 ["Nil"     ,"Nil" ]
   , testGroup "Maybe L" $ renders [ Just (La False False)  ,  Just undef     , undef     ]

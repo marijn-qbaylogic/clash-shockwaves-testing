@@ -54,8 +54,10 @@ data L
   deriving Waveform via (WaveformForLUT L)
 
 instance WaveformLUT L where
-  labelL (La x y) = show x <> " <A> " <> show y
-  labelL (Lb x y) = show x <> " <B> " <> show y
+  translateL = displaySplit (displayWith labelL styleL precL) splitG
+    where
+      labelL (La x y) = show x <> " <A> " <> show y
+      labelL (Lb x y) = show x <> " <B> " <> show y
 
-  styleL (La _ _) = "red"
-  styleL (Lb _ _) = "green"
+      styleL (La _ _) = "red"
+      styleL (Lb _ _) = "green"
