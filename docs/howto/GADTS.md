@@ -1,17 +1,18 @@
 
 ## How to implement Waveform for GADTs
 GADTs can be rather annoying to work with, since they do not allow the derivation of `Generic`.
-This means you will either need to go the lazy route and use lookup tables (see [TODO:link];
-this is not covered in this howto) or do a fully custom implementation of `Waveform`.
-This guide expects you to already know how to do custom `Waveform` implementations (seel [TODO:link]),
+This means you will either need to go the lazy route and use (lookup tables)[LUTS.md];
+or do a fully custom implementation of `Waveform`. This guide expects you to already know
+how to do custom `Waveform` implementations (see [this guide](WAVEFORM.md)),
 and discusses two ways to deal with GADTs in particular.
 
 ### OPTION 1: DO ALL OF IT AT ONCE
-The first option is to disregard the GADTs structure and look at the actual data type instead.
-This type may be easier to translate than the actual GADTs. A good example of this is `Vec`:
-while it would be possible to create instances for `Cons` and `Nil`, this is far more cumbersome
-(and would result in far less clear subsignals) than by simply turning the `Vec` into a list,
-and generating the rest from there.
+The first option is to disregard the GADTs structure in implementation and look at the
+abstract data type instead. This type may be easier to translate than the actual GADTs.
+A good example of this is `Vec`: while it would be possible to create instances for `Cons`
+and `Nil`, this is far more cumbersome (and would result in far less clear subsignals)
+than by simply turning the `Vec` into a list, and generating the rest from there.
+These functions do not need to be synthesizable anyways.
 
 This method depends heavily on what you are trying to achieve. We will go through the
 implementation of `Vec` in here.
@@ -22,11 +23,14 @@ TODO
 A different method it to split up implementations per constructor by creating a
 an extra class that selects the constructor at the type level. An example of this is
 `RTree`, which has the constructors `???` and `Leaf`. At the type level, _we_ already know
-which one of these constructors is going to be used, but Haskell does not.
+which one of these constructors is going to be used, but the compiler does not.
 
 First of all, let's look at all the methods we need to overwrite:
-...
-(some might be the same for branch and leaf)
+- `translate`
+- `addSubtypes`
+- `addValue`
+- `hasLUT`
+Some of these do not
 
 Now we can create a helper class:
 

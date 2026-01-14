@@ -16,8 +16,8 @@ via `WaveformForLUT`.
 By default, `WaveformLUT` uses the standard `Generic`-based functions to create subsignals,
 but uses `Show` to determine the value. This means that a custom implementation may look like:
 
-`WaveformLUT` splits the functionality into translating values for their own signal,
-and the translations of subsignals.
+A LUT implementation requires two functions: `structureL` to provide the subsignal structure,
+and `translateL` to create the translation of a runtime value.
 
 
 > **Important:** Using LUTs has several drawbacks. Any miniscule change to the data type
@@ -29,6 +29,10 @@ and the translations of subsignals.
 
 
 ### CHANGING THE RENDER VALUE
+
+Since `WaveformLUT` uses `Show` by default, it's very easy to change the text of a label:
+derive `Waveform` via `WaveformForLUT`, create a `WaveformLUT` instance,
+and simply overwrite `show`:
 
 ```hs
 idk some example TODO
@@ -42,9 +46,30 @@ instance Show MyData
 instance WaveformLUT MyData
 ```
 
-... you can overwrite this with `labelL`, `precL` and `styleL`
+If you want to change more, we need to first look at the default implementation
+of `translateL`:
 
-(example)
+```hs
+translateL :: a -> Translation
+default translateL :: (Generic a, Show a, WaveformG (Rep a ()), PrecG (Rep a ())) => a -> Translation
+translateL = displaySplit displayShow splitG
+```
+
+`displaySplit` splits the translation functionality into the creation of a render value,
+and the creation of subsignals.
+
+`displayShow` is defined as `displayWith show (const WSNormal) precL`: to create a render value,
+call `show` for the label, `const WSNormal` for the style, and `precL` for the operator precedence.
+
+`splitG` uses `WaveformG` to create a structure like the standard translator, but uses the render value
+for the toplevel and constructor render values.
+
+
+Since a simple value with `WSNormal` and precedence `11` is fairly common (for floats, for example),
+there is a a special display function for this case: `displayAtomWith`. It has a shorthand when using show:
+`displayAtom`.
+
+
 
 Example: color type
 
@@ -62,10 +87,16 @@ instance Show MyColor where
                            ++ hex (b `div` 16)
                            ++ hex (b `rem` 16)
 
+colorToStyle (MyRGB r g b) = WSColor (RGB r g b)
+
 instance WaveformLUT MyColor where
+  translateL = displaySplit (displayWith show colorToStyle (const 11)) splitG
   precL _ = 11
   styleL (MyRGB r g b) = WSColor (RGB r g b)
 ```
+
+
+
 
 ### CHANGING THE SUBSIGNALS
 

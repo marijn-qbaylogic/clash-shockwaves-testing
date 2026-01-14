@@ -8,8 +8,8 @@ First, let's go through the functions and see what we need to do:
 - `translator` is the most important function, as it produces the data that is used
    to determine how bits in the VCD file get translated. `addTypes` and `addSubtypes`
    are used to register these values. This will be covered first.
-- `translate` and `translate'` are for performing translations inside Haskell.
-  This is covered in the second section.
+- `translate` and `translateBin` are for performing translations inside Haskell.
+  These use `pack` and `translator` by default, and don't need to be overwritten.
 - `hasLUT` and `addValue` exist to make LUT-based translations possible and are covered
 in the last section.
 - `width` is the bitwidth as reported by `BitSize` and should not be changed.
@@ -21,7 +21,8 @@ in the last section.
   ```
 - `styles` and `styles'` are for adding constructor styles, and will likely go
   unused in a custom instance. `styles` is meant to be overwritten, while `styles'`
-  fills in any missing values and is meant to be left untouched.
+  fills in any missing values and is meant to be left untouched. For a guide on
+  using styles, look [here](STYLES.md).
 
 
 
@@ -95,8 +96,8 @@ translator = Translator width $ TProduct
   }
 ```
 
-`subs` is a list of translators. If no subsignal name is provided, they will be used,
-and will consume bits, but will not be shown as a subsignal.
+`subs` is a list of translators. The bits are split up and sent to these subtranslators,
+and their translation values are used as subsignals and joined to form the toplevel value.
 
 `start`, `sep` and `stop` are used to attach subsignal values together. If `labels`
 is not empty, the values will be inserted before each subtranslator value - this is
@@ -154,7 +155,7 @@ and more info about its behaviour can be found [here](NUMBER.md).
 
 #### Lookup tables
 `TLut` is used for LUT based types, and unless you _really_ know what you are doing,
-you should not touch this translator.
+you should not touch this translator. Information on using LUTs can be found [here](LUTS.md).
 
 #### Creating custom translator configurations
 Although the translators must still process the bits correctly, a lot of
@@ -201,64 +202,11 @@ In general, the translators `TDuplicate` and `TStyled` can be inserted or remove
 freely, since they do not influence how bits are interpreted, as can all styles and
 precedence and text values.
 
-### TRANSLATION
-
-> **Note:** the translation function is used for LUTs. If you are sure your data
-> type will not be used inside some other data type that is translated using LUTs,
-> it is fine to leave it undefined.
-> ```
-> translate' = undefined
-> ```
-> However, if you are writing code that may be used by others, please consider
-> adding the full implementation.
-
-TODO - actually, why not make it use pack instead? would suffice in most situations. only LUTs need an actual translation, and those are also safer with (unpack . pack)
-
-
-
-An important tool in translation is `translateFromSubs`. This function takes a translator and a list of
-translated subsignals, and produces the resulting translation. The exact behaviour is as follows:
-
-- `TSum`, `TProduct` and `TArray` take the subsignal translations as the subsignal translations.
-  Note that any subsignal names are ignored.
-- `TConst` ignores any subsignal translations and just returns its constant value.
-- `TRef`, `TLut` and `TNumber` cannot create a translation themselves.
-  The input list must be a single subsignal with name `""`, and is assumed to be the
-  translation of the translator itself.
-- `TStyled` and `TDuplicate` are a kind of 'wrapper' translators. Instead of using the provided
-  translations directly, they call `translateFromSubs` on their subtranslator and then process
-  the result.
-
-Let us look at an example data type:
-
-```hs
-data P = A | B Int Int
-```
-
-with a translator structure that looks like:
-
-```
-1) TSum
-2)   TDuplicate
-3)     TConst "A"
-4)   TDuplicate
-5)     TProduct "B"
-6)       TRef Int
-7)       TRef Int
-```
-
-you can render the translation value of 6 and 7 by providing their translations (which changes nothing),
-4 and 5 by providing the translations of 6 and 7,
-2 and 3 by providing nothing,
-and 1 by providing the translation of 2 or 4.
-
-Behind the scenes, this function is mostly used to render `TSum` and `TProduct` without having to deal with
-the prescence of `TDuplicate` and `TStyled`.
-
-> Note that `translateFromSubs` is currently in `Clash.Shockwaves.Internal.Translator`, which is subject to change.
-
 
 ### LUT CREATION
+
+> This section is about the `Waveform` functions needed to deal with types that use lookup tables,
+> not for [translating types using those LUTs](LUTS.md).
 
 `hasLUT` indicates whether there are any data types inside that need to be translated
 and added to a LUT.
@@ -287,7 +235,8 @@ is really simple:
 addValue _ = id
 ```
 
-If there are subvalues, things get harder. Most importantly, the function *must*
+If there are subvalues, things get harder. In most cases, using `addValueG` is sufficient,
+like using `addValueG` for `addValue`. Most importantly, the function *must*
 be properly defined for `undefined` values. This means you cannot directly evaluate
 based on the constructor! For example:
 
@@ -300,8 +249,8 @@ addValue x = case safeWHNF x of
   Nothing          -> id
 ```
 
-Here, `safeWHNF` will try to evaluate its argument to WHNF. If the value is `undefined`,
-it returns `Nothing` and we return the identity function.
+Here, `safeWHNF` is a helper function that will try to evaluate its argument to WHNF.
+If the value is `undefined`, it returns `Nothing` and we simply return `id`.
 
 Keep in mind that when the structure is known even for `undefined` values (as is the case
 when there is only one constructor), the function should simply not evaluate the value
@@ -322,6 +271,10 @@ To avoid splitting values unnecessarily, if it is unknown whether subvalues use 
 addValue x = if hasLUT @(MyType a b) then ... else id
 ```
 
+If a type does not have LUTs, even the `id` functions are skipped where possible.
+
+
+### Conclusion
 
 That's it! For some specific purposes of creating custom `Waveform` instances, see:
 - [How to implement Waveform for GADTs](GADTS.md)
