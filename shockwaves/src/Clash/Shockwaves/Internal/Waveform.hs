@@ -984,7 +984,7 @@ instance (Waveform (RTree d1 a), Waveform a, d ~ d1 + 1, KnownNat d, KnownNat d1
       , sep = ","
       , stop = ">"
       , labels = []
-      , preci = 0
+      , preci = -1
       , preco = 11
       , subs = [("left",tsub),("right",tsub)]
       , style = -1
