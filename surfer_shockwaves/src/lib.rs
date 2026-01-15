@@ -143,7 +143,7 @@ enum TranslatorVariant {
     #[serde(alias = "P")]
     Product {
         #[serde(alias = "t")]
-        subs: Vec<(Option<String>,Translator)>,
+        subs: Vec<(String,Translator)>,
         #[serde(alias = "[")]
         start: String,
         #[serde(alias = ",")]
@@ -438,8 +438,10 @@ impl State {
                         }
                         
                         let big = BigInt::from_signed_bytes_le(&bytes);
+                        let bigstr = big.to_string();
+                        let prec = if bigstr.chars().next().unwrap()=='-' {0} else {11};
 
-                        (apply_spacer(&spacer,big.to_string()),WaveStyle::Normal,11)
+                        (apply_spacer(&spacer,bigstr),WaveStyle::Normal,prec)
                     },
                     NumberFormat::Uns => {
                         match BigUint::parse_bytes(value.as_bytes(),2) {
@@ -512,10 +514,7 @@ impl State {
                         *preco
                     )),
                     // filter out subsignals without labels
-                    sub.into_iter().filter_map(|(n,t)| match n {
-                        Some(n) => Some((n,t)),
-                        None => None,
-                    }).collect()
+                    sub
                 )
             },
             TranslatorVariant::Ref(ty) => {
@@ -581,8 +580,7 @@ impl Data {
             },
             TranslatorVariant::Product{subs, ..} => Structure(
                 subs.iter()
-                    .filter(|(name,_)| name.is_some())
-                    .map(|(name,t)| (name.as_ref().unwrap().clone(), self.trans_structure(t)))
+                    .map(|(name,t)| (name.clone(), self.trans_structure(t)))
                     .collect()
                 ),
             TranslatorVariant::Const(t) => Structure::from_trans(t),
