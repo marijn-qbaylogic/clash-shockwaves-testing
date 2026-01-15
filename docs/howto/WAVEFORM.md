@@ -114,7 +114,7 @@ subvalue translation is compared to the inner prescedence, and if this inner pre
 the subvalue is wrapped in parentheses. The outer precedence is used for the final translation.
 If your data type is joined using spaces (as is often the case), set both to `10`.
 For custom operators, just use the operator precedence for both.
-If values never need parentheses, use `preci=0` and `preco=11`.
+If values never need parentheses, use `preci=-1` and `preco=11`.
 In a case like `fromList [<sub[0]>,<sub[1]>]` you'd want to use `preco=10` (because the value is joined by a space)
 but `preci=0` (since the list syntax isolates the subvalues, so they never need parentheses).
 
