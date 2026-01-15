@@ -172,15 +172,18 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
   | width <= blLength = case variant of
     TRef _ _ btf -> btf bin
     TLut _ _ -> errorX "Can't translate binary data with TLut."
-    TNumber{format,spacer} -> Translation (Just (fromMaybe "undefined" val,if isJust val then WSNormal else WSError,11)) []
+    TNumber{format,spacer} -> Translation (if isJust render then render else Just ("undefined",WSError,11) ) []
       where
         bin' = show bin
-        val = fmap (applySpacer spacer) $ case format of
-          NFBin -> Just bin'
-          NFOct -> Just $ hexDigit <$> chunksOf 3 extend3
-          NFHex -> Just $ hexDigit <$> chunksOf 4 extend4
-          NFUns -> show <$> decodeUns 0 bin'
-          NFSig -> show <$> decodeSig bin' --todo: decode, translate, format etc.
+        render :: Render
+        render = (\(v,s,p) -> (applySpacer spacer v,s,p)) <$> case format of
+          NFBin -> Just ("0b"<>bin'                             , undefstyle, 11)
+          NFOct -> Just ("0o"<>(hexDigit <$> chunksOf 3 extend3), undefstyle, 11)
+          NFHex -> Just ("0x"<>(hexDigit <$> chunksOf 4 extend4), undefstyle, 11)
+          NFUns -> (\i -> (show i, WSNormal, 11)) <$> decodeUns 0 bin'
+          NFSig -> (\i -> (show i, WSNormal, if i>=0 then 11 else 0)) <$> decodeSig bin' --todo: decode, translate, format etc.
+        undefbits = 'x' `elem` bin'
+        undefstyle = if undefbits then WSError else WSNormal
         extend3 = L.replicate (2 - ((n+2) `rem` 3)) '0' <> bin'
         extend4 = L.replicate (3 - ((n+3) `rem` 4)) '0' <> bin'
         n = fromIntegral $ maybe 0 fst spacer :: Int
