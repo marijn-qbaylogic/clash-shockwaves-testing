@@ -110,7 +110,7 @@ library
     Clash.Shockwaves.Style
     Clash.Shockwaves.Style.Colors
     Clash.Shockwaves.Trace
-    Clahs.Shockwaves.BitList
+    Clash.Shockwaves.BitList
     Clash.Shockwaves.Internal.Types
     Clash.Shockwaves.Internal.Waveform
     Clash.Shockwaves.Internal.BitList

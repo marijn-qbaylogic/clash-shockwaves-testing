@@ -955,51 +955,43 @@ type family RTreeIsLeaf d where
 
 instance (Waveform a, KnownNat d, WaveformRTree (RTreeIsLeaf d) d a)
   => Waveform (RTree d a) where
-  translator = Translator (width @(RTree d a)) $ if natVal (Proxy @d) == 0 then
-      TProduct
-        { start = "BR "
-        , sep = ""
-        , stop = ""
-        , labels = []
-        , preci = 10
-        , preco = 10
-        , subs = [("0",tRef (Proxy @a))]
-        , style = -1
-        }
-    else
-      TProduct
-        { start = "<"
-        , sep = ","
-        , stop = ">"
-        , labels = []
-        , preci = 0
-        , preco = 11
-        , subs = [("left",tsub),("right",tsub)]
-        , style = -1
-        }
-    where tsub = tRef (Proxy @a)
-  addSubtypes = addSubtypesRTree @(RTreeIsLeaf d) @d @a
+  translator = translatorRTree @(RTreeIsLeaf d) @d @a
+  addSubtypes =
+    if hasLUT @a then
+      addSubtypesRTree @(RTreeIsLeaf d) @d @a
+    else id
   addValue = addValueRTree @(RTreeIsLeaf d) @d @a
   hasLUT = hasLUT @a
 
 -- | Helper class for implementing 'Waveform' for 'RTree'.
 class WaveformRTree (isLeaf::Bool) d a where
+  translatorRTree :: Translator
   addValueRTree :: RTree d a -> LUTMap -> LUTMap
   addSubtypesRTree :: TypeMap -> TypeMap
 
 instance (Waveform a) => WaveformRTree True 0 a where
-  addValueRTree t = if hasLUT @a then
-    case t of
-      RLeaf x -> addValue x
-      _ -> undefined
-    else id
+  translatorRTree = tRef (Proxy @a)
+  addValueRTree t = case safeWHNF t of
+    Just (RLeaf x) -> addValue x
+    Nothing        -> id
+    _              -> undefined
   addSubtypesRTree = addTypes @a
 
-instance (Waveform (RTree d1 a), Waveform a, d ~ d1 + 1, KnownNat d1)
+instance (Waveform (RTree d1 a), Waveform a, d ~ d1 + 1, KnownNat d, KnownNat d1)
   => WaveformRTree False d a where
-  addValueRTree t = if hasLUT @a then
-    case t of
-      RBranch x y -> addValue (x:: RTree d1 a) . addValue y
-      _ -> undefined
-    else id
-  addSubtypesRTree = addTypes @a
+  translatorRTree = Translator (bitsize $ Proxy @(RTree d a)) $ TProduct
+      { start = "<"
+      , sep = ","
+      , stop = ">"
+      , labels = []
+      , preci = 0
+      , preco = 11
+      , subs = [("left",tsub),("right",tsub)]
+      , style = -1
+      }
+    where tsub = tRef (Proxy @a)
+  addValueRTree t = case safeWHNF t of
+    Just (RBranch x y) -> addValue (x:: RTree d1 a) . addValue y
+    Nothing            -> id
+    _                  -> undefined
+  addSubtypesRTree = addTypes @(RTree d1 a)
