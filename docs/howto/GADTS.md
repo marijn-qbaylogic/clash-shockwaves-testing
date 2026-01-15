@@ -17,7 +17,49 @@ These functions do not need to be synthesizable anyways.
 This method depends heavily on what you are trying to achieve. We will go through the
 implementation of `Vec` in here.
 
-TODO
+This is the `Waveform` instance for `Vec` inside `Clash.Shockwaves.Internal.Waveform`:
+
+```hs
+instance (KnownNat n, Waveform a) => Waveform (Vec n a) where
+  translator = Translator (width @(Vec n a)) $ if natVal (Proxy @n) /= 0 then
+    TArray
+      { start = ""
+      , sep = " :> "
+      , stop = " :> Nil"
+      , preci = 5
+      , preco = 5
+      , len = fromIntegral $ natVal (Proxy @n)
+      , sub = tRef (Proxy @a)
+      }
+    else
+      TConst $ Translation (Just ("Nil",WSNormal,11)) []
+
+  addSubtypes = addTypes @a
+  addValue v = if hasLUT @(Vec n a) then go $ Clash.Prelude.toList v else id
+    where
+      go l = case safeWHNF l of
+        Just []     -> id
+        Just (x:xs) -> addValue x . go xs
+        Nothing     -> id
+  hasLUT = hasLUT @a && (natVal (Proxy @n) /= 0)
+```
+
+The implementation completely discards the notion of `Cons` and `Nil` constructors,
+and simply treats the array as a list with known length.
+
+To start, we define an array translator in `translator`. For empty vectors,
+there is a separate constant implementation.
+
+In `addSubtypes`, we only have to use the element's type, and the same goes for `hasLUT`.
+In the case of an empty vector, we make sure to set `hasLUT` to `False` for empty vectors,
+to potentially save on LUT-induced overhead.
+
+The difficult part lies in `addValue`. `Clash.Prelude.toList` converts the vector to a list,
+but if the vector is not fully defined, this can cause problems. Therefore, we define a folding
+function that checks that the list can be safely converted to WHNF. Each `addValue x` creates a function
+to add one value to the lookup table of `a`, and these are combined with `.`.
+
+
 
 ### OPTION 2: SPLIT THE WAVEFORM CLASS
 A different method it to split up implementations per constructor by creating a
@@ -30,43 +72,75 @@ First of all, let's look at all the methods we need to overwrite:
 - `addSubtypes`
 - `addValue`
 - `hasLUT`
-Some of these do not
 
-Now we can create a helper class:
-
-```hs
-class WaveformForRTree isLeaf n a where
-  ... TODO
-```
-
-We can then write instances for the different constructors:
+Now we can create a helper class `WaveformRTree` which takes care of the different constructors
+of `RTree`, and select the implementation based on a type-level check (`RTreeIsLeaf`).
 
 ```hs
-instance (Waveform (RTree (n-1) a)) => WaveformForRTree False n a where
-  ... TODO
+type family RTreeIsLeaf d where
+  RTreeIsLeaf 0 = True
+  RTreeIsLeaf d = False
+
+instance (Waveform a, KnownNat d, WaveformRTree (RTreeIsLeaf d) d a)
+  => Waveform (RTree d a) where
+  translator = translatorRTree @(RTreeIsLeaf d) @d @a
+  addSubtypes =
+    if hasLUT @a then
+      addSubtypesRTree @(RTreeIsLeaf d) @d @a
+    else id
+  addValue = addValueRTree @(RTreeIsLeaf d) @d @a
+  hasLUT = hasLUT @a
+
+class WaveformRTree (isLeaf::Bool) d a where
+  translatorRTree :: Translator
+  addValueRTree :: RTree d a -> LUTMap -> LUTMap
+  addSubtypesRTree :: TypeMap -> TypeMap
 ```
 
-Note how we could not have added the `Waveform` bound for a smaller `n` for the leaf node!
+In this case, `hasLUT` does not depend on the subtree type - we can get it from `a` directly.
+This means we don't need to include it in our helper class.
+
+Now we can write the instances for leaves and branches. Let's start with the leaves,
+and make them invisible (i.e. a leaf is rendered as it's containing data).
 
 ```hs
-instance (Waveform a) => WaveformForRTree True n a where
-  ... TODO
+instance (Waveform a) => WaveformRTree True 0 a where
+  translatorRTree = tRef (Proxy @a) -- translate as `a`
+  addValueRTree t = case safeWHNF t of -- make the function undefined-proof!!!
+    Just (RLeaf x) -> addValue x
+    Nothing        -> id
+    _              -> undefined
+  addSubtypesRTree = addTypes @a
 ```
 
-Now all that's left is to call the right functions from our `Waveform` instance!
+> **Important**: Make sure that `addValue` (`addValueRTree`) does not error when encountering `undefined` values!
+
+The branch translator is slightly more complex. Since `RTree` is naturally rendered like
+`<<a,b>,<c,d>>` we'll just keep to that structure using a product translator:
 
 ```hs
-instance (WaveformForRTree (n==0) n a) => Waveform (RTree n a)
-  ... TODO @(WaveformForRTree (n==0) n a)
+instance (Waveform (RTree d1 a), Waveform a, d ~ d1 + 1, KnownNat d, KnownNat d1)
+  => WaveformRTree False d a where
+  translatorRTree = Translator (bitsize $ Proxy @(RTree d a)) $ TProduct
+      { start = "<"
+      , sep = ","
+      , stop = ">"
+      , labels = []
+      , preci = -1
+      , preco = 11
+      , subs = [("left",tsub),("right",tsub)]
+      , style = -1
+      }
+    where tsub = tRef (Proxy @(RTree d1 a))
+  addValueRTree t = case safeWHNF t of -- make the function undefined-proof!
+    Just (RBranch x y) -> addValue (x:: RTree d1 a) . addValue y
+    Nothing            -> id
+    _                  -> undefined -- leaf nodes do not exist here
+  addSubtypesRTree = addTypes @(RTree d1 a)
 ```
 
-**Important:** keep in mind that values must be lazily evaluated where possible!
-For example, if the type leaves only one constructor that can be created, do not use:
-```hs
-func (Constructor a b) = func2 a + func3 b
-func _ = undefined
-```
-Instead, try to write code like:
-```hs
-func c = func2 (getA c) + func3 (getB c)
-```
+> Note: it would be a bit more efficient to use `TArray` here; however, we would not be able to
+> assign the subsignal names `"left"` and `"right"`.
+
+
+And just like that, we can translate our GADT type!
