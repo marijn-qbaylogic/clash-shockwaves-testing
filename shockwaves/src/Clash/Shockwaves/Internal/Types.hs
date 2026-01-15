@@ -135,7 +135,7 @@ data TranslatorVariant
   --   , sep = ","
   --   , stop = "}"
   --   , labels = ["a=","b="]
-  --   , preci = 0
+  --   , preci = -1
   --   , preco = 11
   --   }
   -- @
