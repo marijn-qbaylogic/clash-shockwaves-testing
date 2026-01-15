@@ -21,8 +21,8 @@ import           Data.Proxy
 import           Data.Typeable
 import           Data.Map             as M
 import qualified Data.List            as L
+import           Data.Maybe           (fromMaybe)
 import           Data.Char            (isAlpha)
-import           Data.Bifunctor       (first)
 
 -- for standard type instances
 import           Data.Int             (Int8,Int16,Int32,Int64)
@@ -37,8 +37,6 @@ import           Data.Complex         (Complex)
 import           Data.Ord             (Down)
 import           Data.Functor.Identity(Identity)
 import           Control.DeepSeq      (NFData)
-import           Numeric              (showInt, showHex, showOct, showBin)
-import Data.Maybe (fromMaybe)
 
 -- import Data.Maybe (fromMaybe)
 -- import Clash.Sized.Internal.BitVector (xToBV)
@@ -570,7 +568,7 @@ instance (WaveformLUT a, BitPack a, Typeable a)
    where
     ty = typeNameP (Proxy @a)
     bin = BL.binPack x
-    trans = translate x
+    trans = translateBin @(WaveformForLUT a) bin
 
   hasLUT = True
 
@@ -938,8 +936,13 @@ instance (KnownNat n, Waveform a) => Waveform (Vec n a) where
       TConst $ Translation (Just ("Nil",WSNormal,11)) []
 
   addSubtypes = addTypes @a
-  addValue v = L.foldl (.) id $ L.map addValue $ Clash.Prelude.toList v
-  hasLUT = hasLUT @a
+  addValue v = if hasLUT @(Vec n a) then go $ Clash.Prelude.toList v else id
+    where
+      go l = case safeWHNF l of
+        Just []     -> id
+        Just (x:xs) -> addValue x . go xs
+        Nothing     -> id
+  hasLUT = hasLUT @a && (natVal (Proxy @n) /= 0)
 
 
 deriving via WaveformForNumber NFBin BinSpacer (BitVector n)
@@ -1004,7 +1007,7 @@ instance (Waveform (RTree d1 a), Waveform a, d ~ d1 + 1, KnownNat d, KnownNat d1
       , subs = [("left",tsub),("right",tsub)]
       , style = -1
       }
-    where tsub = tRef (Proxy @a)
+    where tsub = tRef (Proxy @(RTree d1 a))
   addValueRTree t = case safeWHNF t of
     Just (RBranch x y) -> addValue (x:: RTree d1 a) . addValue y
     Nothing            -> id
