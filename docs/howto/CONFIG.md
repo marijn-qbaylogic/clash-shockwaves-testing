@@ -94,10 +94,13 @@ either_left = "N"
 either_right = "N"
 ```
 
-> Using `"NORMAL"`/`"N"`, `"WARN"`/`"W"`, `"ERROR"`/`"E"`, `"UNDEF"`/`"U"`, `"HIGHIMP"`/`"Z"` `"WEAK"`/`"Q"`, `"DONTCARE"`/`"X"`,
-you can use any of the standard styles.
+> Using `"NORMAL"`/`"N"`, `"ERROR"`/`"E"`, `"HIDDEN"`/`"H"`, `"INHERIT"`/`"I"`,
+> `"WARN"`/`"W"`, `"UNDEF"`/`"U"`, `"HIGHIMP"`/`"Z"` `"WEAK"`/`"Q"`, `"DONTCARE"`/`"X"`,
+> you can use any of the other standard styles.
+> `"INHERIT"`/`"I"` defaults to `WSInherit 0`; to use other subsignals as a style source,
+> write `"I n"` where `n` is the index of the subsignal
 > 
-> The default style variables are `either_left`, `either_right`, `bool_true`, `bool_false` and `maybe_nothing`.
+> The default style variables are `either_left`, `either_right`, `bool_true`, `bool_false`, `maybe_nothing` and `maybe_just`.
 
 Actually, let's give them slightly different colors - not something that screams
 "bad" and "good", but something different nonetheless. We can write colors using hexadecimal values:

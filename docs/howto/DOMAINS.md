@@ -53,8 +53,8 @@ mySignal' = traceClockResetEnable clk rst en `seq` mySignal
 ![A domain split into clock/reset/enable](cre/domains.png)
 
 > The clock colors can be customized with style variables `clk_a` and `clk_b`.
-> Similarly, the other two can be changed through `reset` and `disabled`.
-> The style of a combined reset and disabled state is controlled by style variable `reset_and_disabled`.
+> Similarly, the other two can be changed through `reset_on`, `reset_off`, and `enable_on` and `enable_off`.
+> The style of a combined reset and disabled state is controlled by style variable `reset_on_enable_off`.
 
 These four functions also have equivalents for scenarios with hidden clocks, resets and enables:
 `traceHiddenClock`, `traceHiddenReset`, `traceHiddenEnable`, and `traceHiddenClockResetEnable`.

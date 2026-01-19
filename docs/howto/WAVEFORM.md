@@ -81,6 +81,8 @@ translator = Translator width $ TSum
 
 > **Note:** The sum translator will consume $clog(|translators|)$ bits.
 
+> **Note:** The `TDuplicate` translator uses the `WSInherit 0` style to copy the style of it's subvalue.
+> The subvalue does not copy the style directly, as copying a style like `Inherit 2` would be problematic.
 
 #### Product types
 Next, if a constructor has fields (a product type), you can use `TProduct`.
@@ -92,7 +94,6 @@ translator = Translator width $ TProduct
   , start, sep, stop,
   , labels
   , preci, preco
-  , style
   }
 ```
 
@@ -116,13 +117,8 @@ If your data type is joined using spaces (as is often the case), set both to `10
 For custom operators, just use the operator precedence for both.
 If values never need parentheses, use `preci=-1` and `preco=11`.
 In a case like `fromList [<sub[0]>,<sub[1]>]` you'd want to use `preco=10` (because the value is joined by a space)
-but `preci=0` (since the list syntax isolates the subvalues, so they never need parentheses).
+but `preci=-1` (since the list syntax isolates the subvalues, so they never need parentheses).
 
-
-`style` is the index of the translator whose style should be copied. Setting this
-to `-1` will make the value have the default style. This is mostly useful for wrapper types
-- by default, types that look like newtypes will copy the style of their subvalue so that
-these styles become visible at a higher level in the signal hierarchy.
 
 
 #### Arrays
@@ -156,6 +152,17 @@ and more info about its behaviour can be found [here](NUMBER.md).
 #### Lookup tables
 `TLut` is used for LUT based types, and unless you _really_ know what you are doing,
 you should not touch this translator. Information on using LUTs can be found [here](LUTS.md).
+
+#### Adding custom styles
+The style of a signal can be changed from the default by using the `TStyled` translator.
+This translator applies the provided style to the toplevel render value created by its subtranslator,
+provided the render value has the `WSDefault` style (so it does not overwrite `WSError`, for example!).
+
+Like `tDup`, `tStyled` is the easiest way to change the style of a translator.
+
+```hs
+translator' = tStyled "red" translator
+```
 
 #### Creating custom translator configurations
 Although the translators must still process the bits correctly, a lot of

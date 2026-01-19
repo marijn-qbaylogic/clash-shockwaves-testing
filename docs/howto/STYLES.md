@@ -15,13 +15,19 @@ data Instr = Add | Sub | Mul | Div
 ### PICKING A WAVESTYLE
 There are a number of standard styles to pick from, corresponding to different
 VCD value types:
-- `WSNormal`: The default.
-- `WSWarn`: A warning.
+- `WSDefault`: The default style. Gets overwritten by the `TStyled` translator and does nothing when adding to the `styles` list in `Waveform`.
 - `WSError`: An error. This looks the same as `WSWarn`, but is propagated upwards through the hierarchy.
-- `WSUndef`: An undefined value. Looks the same as `WSError` and `WSUndef`.
+- `WSHidden`: Do not display the style at all.
+- `WSInherit`: Inherit the style of the n-th subsignal.
+- `WSNormal`: The default of Surfer, explicitly.
+- `WSWarn`: A warning.
+- `WSUndef`: An undefined value. Looks the same as `WSWarn` and `WSError`.
 - `WSHighImp`: A high impedance value.
 - `WSDontCare`: A value that does not matter.
 - `WSWeak`: A weakly driven value.
+
+> **Note:** There is a subtle difference between using `Nothing` as a render value, and the `WSHidden` style.
+> The hidden values can still be read, while reading from a `Nothing` value produces errors.
 
 ```hs
 import Clash.Shockwaves.Waveform

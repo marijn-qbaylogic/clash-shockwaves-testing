@@ -52,6 +52,7 @@ style = ["./shockwaves_style"]
 
 ### Builtin data types (Maybe, Bool, Either)
 maybe_nothing = "#aaa"
+maybe_just = "I"
 
 bool_true = "N"
 bool_false = "Q"
@@ -62,6 +63,8 @@ either_right = "N"
 ### Clock/Reset/Enable (Clash.Shockwaves.Trace.CRE)
 # clk_a = "#fff"
 # clk_b = "#83b"
-# reset = "W"
-disabled = "#d6d639"
-reset_and_disabled = "#cd871f"
+# reset_on = "W"
+# reset_off = "H"
+# enable_on = "H"
+enable_off = "#d6d639"
+reset_on_enable_off = "#cd871f"
