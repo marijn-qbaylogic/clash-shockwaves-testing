@@ -41,16 +41,20 @@ import           Control.DeepSeq      (NFData)
 -- import Data.Maybe (fromMaybe)
 -- import Clash.Sized.Internal.BitVector (xToBV)
 
--- | Get a 'Translation' from a 'Value' using 'WSNormal' and precedence 11.
+-- | Get a 'Render' from a 'Value' using 'WSDefault' and precedence 11.
+rFromVal :: Value -> Render
+rFromVal v = Just (v,WSDefault,11)
+
+-- | Get a 'Translation' from a 'Value' using 'WSDefault' and precedence 11.
 tFromVal :: Value -> Translation
-tFromVal v = Translation (Just (v,WSNormal,11)) []
+tFromVal v = Translation (rFromVal v) []
 
 
 -- | Wrap a 'Translator' in a 'TStyled' translator using some style, unless the
--- provided style is 'WSNormal'.
+-- provided style is 'WSDefault'.
 wrapStyle :: WaveStyle -> Translator -> Translator
-wrapStyle WSNormal t = t
-wrapStyle s        t = tStyled s t
+wrapStyle WSDefault t = t
+wrapStyle s         t = tStyled s t
 
 -- | Wrap a 'Translator' in a 'TStyled' variant translator with the
 -- provided style.
@@ -179,7 +183,7 @@ class (Typeable a, BitPack a) => Waveform a where
 
   -- | Helper function that adds the default style to the 'styles' list. Do not override.
   styles' :: [WaveStyle]
-  styles' = styles @a <> L.repeat WSNormal
+  styles' = styles @a <> L.repeat WSDefault
 
 
 
@@ -310,7 +314,12 @@ instance (WaveformG (fields k), KnownSymbol name)
   => WaveformG (C1 (MetaCons name fix True) fields k) where
   translatorG _ sty = t'
     where
-      t' = wrapStyle (L.head sty) t
+      t' = case L.head sty of
+        WSDefault ->
+          if L.length subs == 1 then
+            tStyled (WSInherit 0) t
+          else t
+        s -> tStyled s t
       subs = fieldTranslatorsG @(C1 (MetaCons name fix True) fields k)
       t = Translator (widthG @(fields k)) $ TProduct
         { start  = sym @name <> "{"
@@ -320,7 +329,6 @@ instance (WaveformG (fields k), KnownSymbol name)
         , preco  = 11
         , labels = L.map ((<>" = ") . fst) subs
         , subs   = subs
-        , style  = if L.length subs == 1 then 0 else -1
         }
   constrTranslatorsG sty =
     [ tDup (sym @name)
@@ -341,7 +349,12 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
   => WaveformG (C1 (MetaCons name fix False) fields k) where
   translatorG _ sty = t'
     where
-      t' = wrapStyle (L.head sty) t
+      t' = case L.head sty of
+        WSDefault ->
+          if L.length subs == 1 then
+            tStyled (WSInherit 0) t
+          else t
+        s -> tStyled s t
       subs = fieldTranslatorsG @(C1 (MetaCons name fix False) fields k)
       t = if isOperator then
             Translator (widthG @(fields k)) $ TProduct
@@ -352,7 +365,6 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
               , preco  = precF @fix
               , labels = []
               , subs = subs
-              , style = -1
               }
           else
             Translator (widthG @(fields k)) $ TProduct
@@ -367,7 +379,6 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
                           _  -> 10
               , labels = []
               , subs = subs
-              , style = if L.length subs == 1 then 0 else -1
               }
 
       sname = safeName (sym @name)
@@ -482,7 +493,7 @@ class (Typeable a, BitPack a) => WaveformLUT a where
   -- | Provides the hierarchy of subsignals.
   structureL :: Structure
   default structureL :: (WaveformG (Rep a ())) => Structure
-  structureL = structure $ translatorG @(Rep a ()) 0 (L.repeat WSNormal)
+  structureL = structure $ translatorG @(Rep a ()) 0 (L.repeat WSDefault)
 
   translateL :: a -> Translation
   default translateL :: (Generic a, Show a, WaveformG (Rep a ()), PrecG (Rep a ())) => a -> Translation
@@ -497,7 +508,7 @@ displaySplit d s x = Translation ren subs
 
 -- | Display a value with 'Show', the default wave style, and operator precedence determined using 'Generic'.
 displayShow :: (Show a, Generic a, PrecG (Rep a ())) => a -> Render
-displayShow = displayWith show (const WSNormal) precL
+displayShow = displayWith show (const WSDefault) precL
 
 -- | Display a value with the provided functions for creating the text value, style and operator precedence.
 displayWith :: (a -> Value) -> (a -> WaveStyle) -> (a -> Prec) -> a -> Render
@@ -506,7 +517,7 @@ displayWith v s p x = Just (v x, s x, p x)
 -- | Display an atomic value (such as a number) using the provided function to obtain the value.BinSpacer
 -- (normal wavestyle, precedence 11).
 displayAtomWith :: (a -> Value) -> a -> Translation
-displayAtomWith f = displaySplit (displayWith f (const WSNormal) (const 11)) noSplit
+displayAtomWith f = displaySplit (displayWith f (const WSDefault) (const 11)) noSplit
 
 -- | Display an atomic value (like a number) with 'Show'. See 'displayAtomWith'.
 displayAtomShow :: (Show a) => a -> Translation
@@ -515,7 +526,7 @@ displayAtomShow = displayAtomWith show
 displayAtomSigWith :: (Show a) => (a -> Value) -> a -> Translation
 displayAtomSigWith f = displaySplit go noSplit
   where
-    go x = Just (v,WSNormal,p)
+    go x = Just (v,WSDefault,p)
       where
         v = f x
         p = case v of
@@ -705,15 +716,6 @@ instance (
   translator =
       Translator (width @(WaveformForNumber f s a))
     $ TNumber{format = formatVal (Proxy @f), spacer = spacerVal (Proxy @s)}
-  -- translate' (WfNum x) = Translation (Just (v',WSNormal,11)) []
-  --   where
-  --     v = (case formatVal $ Proxy @f of
-  --           NFSig -> const $ show $ toInteger x
-  --           NFUns -> showInt x
-  --           NFHex -> showHex x
-  --           NFOct -> showOct x
-  --           NFBin -> showBin x) ""
-  --     v' = applySpacer (spacerVal (Proxy @s)) v
   addSubtypes = id
   addValue _ = id
   hasLUT = False
@@ -757,45 +759,45 @@ for i in range(2,12):
 	c = ",".join("Waveform "+k for k in v)
 	vs = ",".join(v)
 	print(f"""instance ({c}) => Waveform ({vs}) where
-  translator = Translator (width @({vs})) $ TProduct{{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep ({vs}) ())}}
+  translator = Translator (width @({vs})) $ TProduct{{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep ({vs}) ())}}
 """)
 -}
 
 instance (Waveform a0,Waveform a1) => Waveform (a0,a1) where
-  translator = Translator (width @(a0,a1)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1) ())}
+  translator = Translator (width @(a0,a1)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2) => Waveform (a0,a1,a2) where
-  translator = Translator (width @(a0,a1,a2)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2) ())}
+  translator = Translator (width @(a0,a1,a2)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3) => Waveform (a0,a1,a2,a3) where
-  translator = Translator (width @(a0,a1,a2,a3)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3) ())}
+  translator = Translator (width @(a0,a1,a2,a3)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4) => Waveform (a0,a1,a2,a3,a4) where
-  translator = Translator (width @(a0,a1,a2,a3,a4)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4) ())}
+  translator = Translator (width @(a0,a1,a2,a3,a4)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5) => Waveform (a0,a1,a2,a3,a4,a5) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5) ())}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6) => Waveform (a0,a1,a2,a3,a4,a5,a6) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6) ())}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7) ())}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8) ())}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8,Waveform a9) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) ())}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) ())}
 
 instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8,Waveform a9,Waveform a10) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) where
-  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,style= -1,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) ())}
+  translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) ())}
 
 
 -- INSTANCES FOR OTHER STANDARD HASKELL TYPES
 
 instance WaveformConst () where
-  constRen = Just ("()",WSNormal,11)
+  constRen = rFromVal "()"
 deriving via WaveformForConst () instance Waveform ()
 
 instance Waveform Bool where
@@ -806,11 +808,10 @@ instance Waveform Bool where
 instance (Waveform a) => Waveform (Maybe a) where
   translator = Translator (width @(Maybe a)) $ TSum
     [ Translator 0 $ TConst $ Translation (Just ("Nothing","$maybe_nothing",11)) []
-    , Translator (width @a) $ TProduct
+    , tStyled (WSVar "$maybe_just" (WSInherit 0)) $ Translator (width @a) $ TProduct
       { start = "Just "
       , sep = ""
       , stop = ""
-      , style = 0
       , labels = []
       , preci = 10
       , preco = 10
@@ -933,7 +934,7 @@ instance (KnownNat n, Waveform a) => Waveform (Vec n a) where
       , sub = tRef (Proxy @a)
       }
     else
-      TConst $ Translation (Just ("Nil",WSNormal,11)) []
+      TConst $ tFromVal "Nil"
 
   addSubtypes = addTypes @a
   addValue v = if hasLUT @(Vec n a) then go $ Clash.Prelude.toList v else id
@@ -959,7 +960,7 @@ deriving via WaveformForLUT (Fixed r i f)
 
 -- snat
 instance (KnownNat n, BitPack (SNat n)) => WaveformConst (SNat n) where
-  constRen = Just (show $ natVal $ Proxy @n, WSNormal, 11)
+  constRen = rFromVal $ show $ natVal $ Proxy @n
 deriving via WaveformForConst (SNat n)
   instance (KnownNat n, BitPack (SNat n)) => Waveform (SNat n)
 
@@ -1005,7 +1006,6 @@ instance (Waveform (RTree d1 a), Waveform a, d ~ d1 + 1, KnownNat d, KnownNat d1
       , preci = -1
       , preco = 11
       , subs = [("left",tsub),("right",tsub)]
-      , style = -1
       }
     where tsub = tRef (Proxy @(RTree d1 a))
   addValueRTree t = case safeWHNF t of

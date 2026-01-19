@@ -10,22 +10,22 @@ Type definitions for Shockwaves.
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Clash.Shockwaves.Internal.Types where
-import Clash.Prelude hiding (sub)
-import Clash.Shockwaves.Internal.BitList (BitList)
+module           Clash.Shockwaves.Internal.Types where
+import           Clash.Prelude hiding (sub)
+import           Clash.Shockwaves.Internal.BitList (BitList)
 import qualified Data.List as L
-import Data.Map as M
-import Data.Data (Typeable)
+import           Data.Map as M
+import           Data.Data (Typeable)
 
-import Data.Aeson hiding (Value)
-import Data.Colour.SRGB (RGB(..), toSRGB24, Colour)
-import Data.Word (Word8)
-import Control.DeepSeq (NFData (rnf))
-import Data.String (IsString)
-import GHC.Exts (IsString(fromString))
-import Data.Colour.Names (readColourName)
-import Data.Maybe (fromJust)
-import Data.Char (digitToInt)
+import           Data.Aeson hiding (Value)
+import           Data.Colour.SRGB (RGB(..), toSRGB24, Colour)
+import           Data.Word (Word8)
+import           Control.DeepSeq (NFData (rnf))
+import           Data.String (IsString)
+import           GHC.Exts (IsString(fromString))
+import           Data.Colour.Names (readColourName)
+import           Data.Maybe (fromJust)
+import           Data.Char (digitToInt)
 
 -- some type aliases for clarity
 type TypeName = String
@@ -66,13 +66,18 @@ data Translation
 
 -- | The style in which a signal should be displayed.
 data WaveStyle
-  = WSNormal -- ^ The default waveform style.
-  | WSWarn -- ^ A warning value.
+  = WSDefault -- ^ The default waveform style. This is the only style overwritten by TStyled.
   | WSError -- ^ An error value. Errors are propagated by translators.
+  | WSHidden -- ^ Do not display any value, even if it exists.
+  | WSInherit Natural -- ^ Copy the style of the nth subsignal.
+
+  | WSNormal -- ^ Surfer's default signal style.
+  | WSWarn -- ^ A warning value.
   | WSUndef -- ^ An undefined value.
   | WSHighImp -- ^ A high impedance value.
   | WSDontCare -- ^ A value that does not matter.
   | WSWeak -- ^ A weakly defined value.
+
   | WSColor Color -- ^ A custom color. See "Clash.Shockwaves.Style" for more information.
   | WSVar String WaveStyle -- ^ A variable in a style configuration file, with a default.
   deriving (Show, Generic, Eq)
@@ -150,10 +155,6 @@ data TranslatorVariant
     -- Else, the length must match that of @subs@, and provided values are inserted.
     , preci        :: Prec -- ^ Inner precedence: used on subvalues.
     , preco        :: Prec -- ^ Outer precedence: used for the combined value.
-    , style        :: Int
-    -- ^ Select which field should be used to determine the style.
-    -- If no style is present in this field, or style is set to -1,
-    -- use the default style instead.
     }
 
   -- | An array value. This behaves much like 'TProduct', except that no labels
@@ -209,7 +210,7 @@ instance ToJSON Translator where
     where v' = case v of
                 TRef n _ _ -> object ["R" .= n]
                 TSum subs -> object ["S" .= toJSON subs]
-                TProduct{subs,start,sep,stop,labels,preci,preco,style} ->
+                TProduct{subs,start,sep,stop,labels,preci,preco} ->
                   object
                     ["P" .= object
                       [ "t" .= toJSON subs
@@ -218,8 +219,7 @@ instance ToJSON Translator where
                       , "]" .= stop
                       , "n" .= labels
                       , "p" .= preci
-                      , "P" .= preco
-                      , "s" .= style ]]
+                      , "P" .= preco ]]
                 TConst t -> object ["C" .= toJSON t]
                 TLut lut s -> object ["L" .= [toJSON lut,toJSON s]]
                 TNumber{format,spacer} -> object ["N" .= object
@@ -238,13 +238,16 @@ instance ToJSON Translator where
 
 instance ToJSON WaveStyle where
   toJSON = \case
-    WSNormal   -> "N"
-    WSWarn     -> "W"
-    WSError    -> "E"
-    WSUndef    -> "U"
-    WSHighImp  -> "Z"
-    WSDontCare -> "X"
-    WSWeak     -> "Q"
+    WSDefault   -> "D"
+    WSError     -> "E"
+    WSHidden    -> "H"
+    WSInherit n -> object ["I" .= [n]]
+    WSNormal    -> "N"
+    WSWarn      -> "W"
+    WSUndef     -> "U"
+    WSHighImp   -> "Z"
+    WSDontCare  -> "X"
+    WSWeak      -> "Q"
     WSColor (RGB r g b) -> object ["C" .= [r,g,b,255]]
     WSVar var dflt -> object ["V" .= [toJSON var, toJSON dflt]]
 instance ToJSON NumberFormat where

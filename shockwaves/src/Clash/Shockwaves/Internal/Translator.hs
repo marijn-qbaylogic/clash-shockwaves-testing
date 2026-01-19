@@ -7,18 +7,18 @@ Values are constructed from their subvalues.
 
 module Clash.Shockwaves.Internal.Translator where
 
-import Clash.Prelude hiding (sub)
-import Clash.Shockwaves.Internal.BitList
+import           Clash.Prelude hiding (sub)
+import           Clash.Shockwaves.Internal.BitList
 import qualified Clash.Shockwaves.BitList as BL
-import Clash.Shockwaves.Internal.Types
+import           Clash.Shockwaves.Internal.Types
 import qualified Data.List as L
-import Data.Maybe (mapMaybe, fromMaybe, isJust)
-import Data.Bifunctor (first)
-import Clash.Shockwaves.Internal.Util
-import Data.List.Extra (chunksOf)
-import Numeric (showHex)
-import Math.NumberTheory.Logarithms (intLog2)
-import Data.Tuple.Extra (second)
+import           Data.Maybe (fromMaybe, isJust)
+import           Data.Bifunctor (first)
+import           Clash.Shockwaves.Internal.Util
+import           Data.List.Extra (chunksOf)
+import           Numeric (showHex)
+import           Math.NumberTheory.Logarithms (intLog2)
+import           Data.Tuple.Extra (second)
 
 
 -- | Apply a 'WaveStyle' to a 'Translation'
@@ -27,7 +27,7 @@ applyStyle s (Translation r sb) = Translation (applyStyleR s r) sb
 
 -- | Apply a 'WaveStyle' to a 'Render' value
 applyStyleR :: WaveStyle -> Render -> Render
-applyStyleR s (Just (l,WSNormal,p)) = Just (l,s,p)
+applyStyleR s (Just (l,WSDefault,p)) = Just (l,s,p)
 applyStyleR _ r = r
 
 -- | Render some error message. The precedence is set to 11 (i.e. an atomic).
@@ -115,7 +115,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
     { start, sep, stop
     , labels
     , preci, preco
-    } -> Translation (Just (v,WSNormal,preco)) $ filterSignals subs
+    } -> Translation (Just (v,WSDefault,preco)) $ filterSignals subs
       where
         labels' = L.map Just labels <> L.repeat Nothing
         subs' = applyPrecL preci subs
@@ -137,7 +137,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
             (    start
               <> joinWith sep (L.map (getVal . applyPrec preci . snd) subs)
               <> stop
-            , WSNormal, preco )
+            , WSDefault, preco )
         else
           renError "{values missing}"
 
@@ -180,10 +180,10 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
           NFBin -> Just ("0b"<>bin'                             , undefstyle, 11)
           NFOct -> Just ("0o"<>(hexDigit <$> chunksOf 3 extend3), undefstyle, 11)
           NFHex -> Just ("0x"<>(hexDigit <$> chunksOf 4 extend4), undefstyle, 11)
-          NFUns -> (\i -> (show i, WSNormal, 11)) <$> decodeUns 0 bin'
-          NFSig -> (\i -> (show i, WSNormal, if i>=0 then 11 else 0)) <$> decodeSig bin' --todo: decode, translate, format etc.
+          NFUns -> (\i -> (show i, WSDefault, 11)) <$> decodeUns 0 bin'
+          NFSig -> (\i -> (show i, WSDefault, if i>=0 then 11 else 0)) <$> decodeSig bin' --todo: decode, translate, format etc.
         undefbits = 'x' `elem` bin'
-        undefstyle = if undefbits then WSError else WSNormal
+        undefstyle = if undefbits then WSError else WSDefault
         extend3 = L.replicate (2 - ((n+2) `rem` 3)) '0' <> bin'
         extend4 = L.replicate (3 - ((n+3) `rem` 4)) '0' <> bin'
         n = fromIntegral $ maybe 0 fst spacer :: Int
@@ -217,9 +217,10 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
 
     -- recursive
     TStyled sty t -> applyStyle sty $ translateBinWith t bin
-    TDuplicate n t -> Translation ren [(n,t')]
+    TDuplicate n t -> Translation ren' [(n,t')]
       where t' = translateBinWith t bin
             Translation ren _ = t'
+            ren' = (\(v,_,p) -> (v,WSInherit 0,p)) <$> ren
   | otherwise = errorX $ "BitList length ("<>show blLength<>") is smaller than translator length ("<>show width<>")"
 
 
