@@ -205,8 +205,8 @@ pat f v = case safeVal (f v) of
   Right _ -> return ()
   Left e -> assertFailure $ show v <> ": " <> fromMaybe "error" e
 
-pats :: (Waveform a, ShowX a) => [a] -> [T->Int] -> [TestTree]
-pats = L.zipWith go
+pats :: (Waveform a, ShowX a) => [(a,T->Int)] -> [TestTree]
+pats = L.map (uncurry go)
   where
     go :: (Waveform a, ShowX a) => a -> (T -> Int) -> TestTree
     go x f = testCase (showX x) $ pat f $ toT $ translate x
@@ -214,7 +214,7 @@ pats = L.zipWith go
 {-
 
 Tests take the format
-  `pats [values] [patterns]`
+  `pats [(value,pattern)]`
 where a pattern is a lambda function that matches a specific input and returns 0:
   `\(value pattern)->0`
 to test if the translation is as expected.
@@ -224,24 +224,38 @@ to test if the translation is as expected.
 -}
 translationT :: TestTree
 translationT = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
-  [ testGroup "S"  $ pats [S           ,undef]
-                          [\(T _ [])->0,\(T _ [])->0]
-  , testGroup "M"  $ pats [ Ma                              , Mb                      , undef       ]
-                          [\(T _ ["Ma" :@ T ("Ma",_) []])->0, \(T _ ["Mb":@T _ []])->0, \(T _ [])->0]
-  , testGroup "F"  $ pats [ M True 3                            , undef                              ]
-                          [\(T _ ["0" :@ T _ [],"1":@T _ []])->0, \(T _ ["0":@T _ [],"1":@T _ []])->0]
-  , testGroup "Op" $ pats [ True ://: (False ://: False)                           , undef                                                  ]
-                          [\(T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]])->0,\(T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]])->0]
-  , testGroup "St" $ pats [ St{b=3,a=False}                    , undef                              ]
-                          [\(T _ ["a":@T _ [],"b":@T _ []])->0, \(T _ ["a":@T _ [],"b":@T _ []])->0]
-  , testGroup "C"  $ pats [ Red                                                               , Green                                                                       ]
-                          [\(T ("Red",WSInherit 0) ["Red":@T ("Red",WSVar "red" "red") []])->0, \(T ("Green",WSInherit 0) ["Green":@T ("Green",WSVar "green" "lime") []])->0]
-  , testGroup "L"  $ pats [ La True False                                            , undef       ]
-                             [\(T (_,"red") ["La":@T (_,"red") ["0":@ _,"1":@ _]])->0, \(T _ [])->0]
-  , testGroup "Maybe" $ pats [ Nothing    , Just True               , undef       ]
-                             [\(T _ [])->0, \(T _ ["Just.0":@ _])->0, \(T _ [])->0]
-  , testGroup "Vec 2" $ pats [ True :> False :> Nil      , undef :> undef :> Nil      , True :> undef              , undef                      ]
-                             [\(T _ ["0":@ _,"1":@ _])->0, \(T _ ["0":@ _,"1":@ _])->0, \(T _ ["0":@ _,"1":@ _])->0, \(T _ ["0":@ _,"1":@ _])->0]
+  [ testGroup "S"  $ pats
+    [ (S                            , \( T _ []                                                                 )->0)
+    , (undef                        , \( T _ []                                                                 )->0) ]
+  , testGroup "M"  $ pats
+    [ (Ma                           , \( T _ ["Ma":@T ("Ma",_) []]                                              )->0)
+    , (Mb                           , \( T _ ["Mb":@T _        []]                                              )->0)
+    , (undef                        , \( T _ []                                                                 )->0) ]
+  , testGroup "F"  $ pats
+    [ (M True 3                     , \( T _ ["0":@T _ [],"1":@T _ []]                                          )->0)
+    , (undef                        , \( T _ ["0":@T _ [],"1":@T _ []]                                          )->0) ]
+  , testGroup "Op" $ pats
+    [ (True ://: (False ://: False) , \( T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]]                     )->0)
+    , (undef                        , \( T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]]                     )->0) ]
+  , testGroup "St" $ pats
+    [ (St{b=3,a=False}              , \( T _ ["a":@T _ [],"b":@T _ []]                                          )->0)
+    , (undef                        , \( T _ ["a":@T _ [],"b":@T _ []]                                          )->0) ]
+  , testGroup "C"  $ pats
+    [ (Red                          , \( T ("Red"  ,WSInherit 0) ["Red"  :@T ("Red"  ,WSVar "red"   "red" ) []] )->0)
+    , (Green                        , \( T ("Green",WSInherit 0) ["Green":@T ("Green",WSVar "green" "lime") []] )->0) ]
+  , testGroup "L"  $ pats
+    [ (La True False                , \( T (_,"red") ["La":@T (_,"red") ["0":@ _,"1":@ _]]                      )->0)
+    , (undef                        , \( T _         []                                                         )->0) ]
+  , testGroup "Maybe" $ pats
+    [ (Nothing                      , \( T _ []                                                                 )->0)
+    , (Just True                    , \( T _ ["Just.0":@ _]                                                     )->0)
+    , (undef                        , \( T _ []                                                                 )->0) ]
+  , testGroup "Vec 2" $ pats
+    [ (True  :> False :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
+    , (undef :> undef :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
+    , (True  :> undef               , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
+    , (undef                        , \( T _ ["0":@ _,"1":@ _]                                                  )->0) ]
+
 --   , testCase "debug Maybe L" $ assertFailure . show $ translator @(Maybe L)
 --   , testCase "debug L" $ assertFailure . show $ translator @L
 --   , testCase "debug L" $ assertFailure . show $ translate (La True False)
@@ -256,8 +270,8 @@ calling `addValue`
 -}
 lutT :: TestTree
 lutT = testGroup "LUT VALUES ARE STORED"
-  [ testCase "True <A> True" $ addValue (La True True) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
+  [ testCase "True <A> True"        $ addValue (La True True)        M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
   , testCase "Just (True <A> True)" $ addValue (Just $ La True True) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
-  , testCase "Just (undefined @L)" $ addValue (Just $ undef @L) M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L)])]
-  , testCase "undefined @(Maybe L)" $ addValue (undef @(Maybe L)) M.empty @?= M.empty
+  , testCase "Just (undefined @L)"  $ addValue (Just $ undef @L)     M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L    )])]
+  , testCase "undefined @(Maybe L)" $ addValue (undef @(Maybe L))    M.empty @?= M.empty
   ]
