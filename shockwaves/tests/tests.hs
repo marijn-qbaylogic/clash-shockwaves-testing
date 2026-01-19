@@ -52,6 +52,14 @@ tests = testGroup "Tests" [testStructureT,structureT,renderT,translationT,lutT]
 undef :: a
 undef = Clash.Prelude.undefined
 
+{-
+
+Test format:
+  `isR/isL $ testStructure structure translation`
+to test if `testStructure` accurately returns whether
+the translation is a subset of the provided structure.
+
+-}
 testStructureT :: TestTree
 testStructureT = testGroup "TEST testStructure FUNCTION"
   [ testCase "is empty, get empty"  $ isR $ testStructure
@@ -97,6 +105,12 @@ testAll f = L.map go
 testS :: Waveform a => a -> Assertion
 testS (x::a) = isR $ testStructure (structure $ translator @a) $ translate x
 
+{-
+
+For all listed values, ensure that the translation is a subset of the
+structure of the translator.
+
+-}
 structureT :: TestTree
 structureT = testGroup "TRANSLATION MATCHES TRANSLATOR STRUCTURE"
   [ testGroup "S"  $ testAll testS [S,undef]
@@ -128,6 +142,13 @@ renders xs = L.zipWith go rs'
     rs' = L.map (\x -> (showX x, getRen $ translate x)) xs
     go (n,x) y = testCase n $ x @?= y
 
+{-
+
+Tests take the format
+  `renders [values] [string representations]`
+to test if the render value is as expected.
+
+-}
 renderT :: TestTree
 renderT = testGroup "RENDERED STRING IS CORRECT"
   [ testGroup "S"  $ renders [ S , undef]
@@ -190,6 +211,17 @@ pats = L.zipWith go
     go :: (Waveform a, ShowX a) => a -> (T -> Int) -> TestTree
     go x f = testCase (showX x) $ pat f $ toT $ translate x
 
+{-
+
+Tests take the format
+  `pats [values] [patterns]`
+where a pattern is a lambda function that matches a specific input and returns 0:
+  `\(value pattern)->0`
+to test if the translation is as expected.
+
+`a :@ b` is equivalent to `(a,b)` and only exists to make the pattern more readable.
+
+-}
 translationT :: TestTree
 translationT = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
   [ testGroup "S"  $ pats [S           ,undef]
@@ -202,8 +234,8 @@ translationT = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
                           [\(T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]])->0,\(T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]])->0]
   , testGroup "St" $ pats [ St{b=3,a=False}                    , undef                              ]
                           [\(T _ ["a":@T _ [],"b":@T _ []])->0, \(T _ ["a":@T _ [],"b":@T _ []])->0]
-  , testGroup "C"  $ pats [ Red                                             , Green                                                    ]
-                          [\(T ("Red",WSVar "red" "red") ["Red":@T ("Red",WSVar "red" "red") []])->0, \(T ("Green",WSVar "green" "lime") ["Green":@T ("Green",WSVar "green" "lime") []])->0]
+  , testGroup "C"  $ pats [ Red                                                               , Green                                                                       ]
+                          [\(T ("Red",WSInherit 0) ["Red":@T ("Red",WSVar "red" "red") []])->0, \(T ("Green",WSInherit 0) ["Green":@T ("Green",WSVar "green" "lime") []])->0]
   , testGroup "L"  $ pats [ La True False                                            , undef       ]
                              [\(T (_,"red") ["La":@T (_,"red") ["0":@ _,"1":@ _]])->0, \(T _ [])->0]
   , testGroup "Maybe" $ pats [ Nothing    , Just True               , undef       ]
@@ -216,6 +248,12 @@ translationT = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
 --   , testCase "debug L" $ assertFailure . show $ precL (La True False)
   ]
 
+
+{-
+Test whether the LUT table contains the expected values after
+calling `addValue`
+
+-}
 lutT :: TestTree
 lutT = testGroup "LUT VALUES ARE STORED"
   [ testCase "True <A> True" $ addValue (La True True) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
