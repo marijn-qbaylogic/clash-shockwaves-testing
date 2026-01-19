@@ -503,9 +503,10 @@ class (Typeable a, BitPack a) => WaveformLUT a where
 
 displaySplit :: (a -> Render) -> (Render -> a -> [(SubSignal,Translation)]) -> a -> Translation
 displaySplit d s x = Translation ren subs
-      ren = safeValOr (renError "undefined") $ d x
-      subs = safeValOr [] $
-             s ren x
+  where
+    ren = safeValOr (renError "undefined") $ d x
+    subs = safeValOr [] $
+            s ren x
 
 -- | Display a value with 'Show', the default wave style, and operator precedence determined using 'Generic'.
 displayShow :: (Show a, Generic a, PrecG (Rep a ())) => a -> Render

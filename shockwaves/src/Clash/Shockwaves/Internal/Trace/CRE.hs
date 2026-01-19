@@ -46,17 +46,17 @@ clkB :: Render
 clkB = Just ("",WSVar "clk_b" "#83b",11)
 
 rstOff :: Render
-rstOff = Nothing
+rstOff = Just ("ACTIVE", WSVar "reset_off" WSHidden,11)
 rstOn :: Render
-rstOn = Just ("RESET", WSVar "reset" WSWarn,11)
+rstOn = Just ("RESET", WSVar "reset_on" WSWarn,11)
 
 enOn :: Render
-enOn = Nothing
+enOn = Just ("ENABLED", WSVar "enable_on" WSHidden,11)
 enOff :: Render
-enOff = Just ("DISABLED", WSVar "disabled" WSWarn,11)
+enOff = Just ("DISABLED", WSVar "enable_off" WSWarn,11)
 
 rstAndDis :: Render
-rstAndDis = Just ("DISABLED|RESET", WSVar "reset_and_disabled" WSWarn,11)
+rstAndDis = Just ("DISABLED|RESET", WSVar "reset_on_enable_off" WSWarn,11)
 
 instance Waveform ClockWave where
   translator = Translator 2 $ TSum
@@ -66,9 +66,6 @@ instance Waveform ClockWave where
       ]
     , vConst clkI
     ]
-  translate' ClockInit = tConst clkI
-  translate' (ClockWave False) = tConst clkA
-  translate' (ClockWave True) = tConst clkB
 
   addSubtypes = id
   hasLUT = False
@@ -79,10 +76,6 @@ instance (KnownDomain dom) => Waveform (ResetWave dom) where
     ( case resetPolarity @dom of
         SActiveHigh -> [rstOff,rstOn]
         SActiveLow  -> [rstOff,rstOn] )
-  translate' (ResetWave r) = case (resetPolarity @dom,r) of
-    (SActiveHigh,True) -> tConst rstOn
-    (SActiveLow,False) -> tConst rstOn
-    _                  -> tConst rstOff
 
   addSubtypes = id
   hasLUT = False
@@ -93,29 +86,25 @@ instance Waveform EnableWave where
     [ vConst enOff
     , vConst enOn
     ]
-  translate' (EnableWave False) = tConst enOff
-  translate' (EnableWave True ) = tConst enOn
 
   addSubtypes = id
   hasLUT = False
   addValue _ = id
 
 instance KnownDomain dom => WaveformLUT (CREWave dom) where
-  labelL = undefined
-  styleL = undefined
-  precL = undefined
-
-  displayL (CREWave c r (EnableWave e)) = case (c,isRst r,e) of
-    (_              ,True,False) -> rstAndDis
-    (_              ,True,_    ) -> rstOn
-    (_              ,_   ,False) -> enOff
-    (ClockInit      ,_   ,_    ) -> clkI
-    (ClockWave False,_   ,_    ) -> clkA
-    (ClockWave True ,_   ,_    ) -> clkB
-    where
-      isRst (ResetWave r') = case resetPolarity @dom of
-        SActiveHigh -> r'
-        SActiveLow  -> not r'
+  translateL = displaySplit displayL splitG
+    where 
+      displayL (CREWave c r (EnableWave e)) = case (c,isRst r,e) of
+        (_              ,True,False) -> rstAndDis
+        (_              ,True,_    ) -> rstOn
+        (_              ,_   ,False) -> enOff
+        (ClockInit      ,_   ,_    ) -> clkI
+        (ClockWave False,_   ,_    ) -> clkA
+        (ClockWave True ,_   ,_    ) -> clkB
+        where
+          isRst (ResetWave r') = case resetPolarity @dom of
+            SActiveHigh -> r'
+            SActiveLow  -> not r'
 
 
 clkSignal :: (KnownDomain dom) => Clock dom -> Signal dom ClockWave
