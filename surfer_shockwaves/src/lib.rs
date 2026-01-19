@@ -100,6 +100,15 @@ type Value = String;
 
 #[derive(Serialize,Deserialize,Debug,Clone)]
 enum WaveStyle {
+    #[serde(alias = "D")]
+    Default,
+    #[serde(alias = "E")]
+    Error,
+    #[serde(alias = "H")]
+    Hidden,
+    #[serde(alias = "I")]
+    Inherit(usize),
+
     #[serde(alias = "N")]
     Normal,
     #[serde(alias = "W")]
@@ -112,8 +121,7 @@ enum WaveStyle {
     DontCare,
     #[serde(alias = "Q")]
     Weak,
-    #[serde(alias = "E")]
-    Error,
+
     #[serde(alias = "C")]
     Color(Color32),
     #[serde(alias = "V")]
@@ -156,8 +164,6 @@ enum TranslatorVariant {
         preci: Prec,
         #[serde(alias = "P")]
         preco: Prec,
-        #[serde(alias = "s")]
-        style: i16,
     },
 
     #[serde(alias = "C")]
@@ -373,7 +379,7 @@ impl State {
                 res.push(stop);
 
                 Translation(
-                    Some((res.join(""),WaveStyle::Normal,*preco)),
+                    Some((res.join(""),WaveStyle::Default,*preco)),
                     subs.into_iter().enumerate().map(|(i,t)| (format!("{i}"),t)).collect()
                 )
             },
@@ -441,19 +447,19 @@ impl State {
                         let bigstr = big.to_string();
                         let prec = if bigstr.chars().next().unwrap()=='-' {0} else {11};
 
-                        (apply_spacer(&spacer,bigstr),WaveStyle::Normal,prec)
+                        (apply_spacer(&spacer,bigstr),WaveStyle::Default,prec)
                     },
                     NumberFormat::Uns => {
                         match BigUint::parse_bytes(value.as_bytes(),2) {
-                            Some(big) => (apply_spacer(&spacer,big.to_string()),WaveStyle::Normal,11),
+                            Some(big) => (apply_spacer(&spacer,big.to_string()),WaveStyle::Default,11),
                             None => {return error("unknown")},
                         }
                     },
-                    NumberFormat::Bin   => (apply_spacer(&spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Normal},11),
+                    NumberFormat::Bin   => (apply_spacer(&spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Default},11),
                     _ => error("{number format not implemented yet}").0.unwrap() // TODO: add oct and hex number formats
                 }),vec![])
             },
-            TranslatorVariant::Product { subs, start, sep, stop, labels, preci, preco, style } => {
+            TranslatorVariant::Product { subs, start, sep, stop, labels, preci, preco } => {
                 let mut sub = vec![];
                 let _ = subs.iter().fold(0usize,|i,(n,t)| {
                     let translation = self.translate_with(t,&value[i..]);
@@ -500,19 +506,7 @@ impl State {
                 let val = vals.join("");
 
                 Translation(
-                    Some((
-                        val,
-                        // take style from other field if specified and present
-                        if *style>=0 {
-                            sub.get(*style as usize).map_or(WaveStyle::Normal,|f|
-                                f.1.0.as_ref()
-                                     .map_or(WaveStyle::Normal,|r| r.1.clone())
-                            )
-                        } else {
-                            WaveStyle::Normal
-                        },
-                        *preco
-                    )),
+                    Some((val,WaveStyle::Default,*preco)),
                     // filter out subsignals without labels
                     sub
                 )
@@ -710,13 +704,26 @@ impl Config {
     }
     fn get_style_string(&mut self, ws: &str) -> Option<WaveStyle> {
         Some(match ws {
+            ws if ws=="DEFAULT"  || ws=="D" => WaveStyle::Default,
+            ws if ws=="ERROR"    || ws=="E" => WaveStyle::Undef,
+            ws if ws=="HIDDEN"   || ws=="H" => WaveStyle::Hidden,
+            ws if ws=="INHERIT"  || ws=="I" => WaveStyle::Inherit(0),
+            ws if ws.starts_with("I ") =>
+                match ws[2..].parse::<u32>() {
+                    Ok(n) => WaveStyle::Inherit(n as usize),
+                    Err(_) => {
+                        error!("Invalid inherit: {ws}");
+                        return None
+                    }
+                }
+
             ws if ws=="NORMAL"   || ws=="N" => WaveStyle::Normal,
             ws if ws=="WARN"     || ws=="W" => WaveStyle::Warn,
-            ws if ws=="ERROR"    || ws=="E" => WaveStyle::Undef,
             ws if ws=="UNDEF"    || ws=="U" => WaveStyle::Undef,
             ws if ws=="HIGHIMP"  || ws=="Z" => WaveStyle::HighImp,
             ws if ws=="WEAK"     || ws=="Q" => WaveStyle::Weak,
             ws if ws=="DONTCARE" || ws=="X" => WaveStyle::DontCare,
+            
             hex if hex.starts_with("#") => {
                 match Color32::from_hex(hex) {
                     Ok(c) => WaveStyle::Color(c),
@@ -734,11 +741,6 @@ impl Config {
                 return None
             }
         })
-        // hex6
-        // hex3
-        // var
-        // colname
-        // default name
     }
 
     fn do_prop_errors(&self) -> bool {
@@ -772,14 +774,38 @@ impl Translation {
             SubFieldTranslationResult{ name, result: t.convert() }
         ).collect();
         match render {
-            Some((val,style,_prec)) => TranslationResult{
-                val: ValueRepr::String(val),
-                kind: style.convert(),
+            // Hidden style
+            Some((_val,WaveStyle::Hidden,_prec)) => TranslationResult{
+                val: ValueRepr::NotPresent,
+                kind: ValueKind::Normal,
                 subfields,
             },
             None => TranslationResult{
                 val: ValueRepr::NotPresent,
                 kind: ValueKind::Normal,
+                subfields,
+            },
+
+            // Inherit style
+            Some((val,WaveStyle::Inherit(n),_prec)) => {
+                let kind = if let Some(SubFieldTranslationResult{result:TranslationResult{kind,..},..}) = subfields.get(n) {
+                    kind.clone()
+                } else {
+                    error!("Attempt to inherit style from nonexistent subsignal {n}");
+                    ValueKind::Warn
+                };
+
+                TranslationResult{
+                    val: ValueRepr::String(val),
+                    kind,
+                    subfields
+                }
+            }
+
+            // Other styles
+            Some((val,style,_prec)) => TranslationResult{
+                val: ValueRepr::String(val),
+                kind: style.convert(),
                 subfields,
             },
         }
@@ -835,14 +861,17 @@ impl WaveStyle {
     /// Convert a Shockwaves `WaveStyle` into a Surfer `ValueKind`
     fn convert(self) -> ValueKind {
         match self {
-            WaveStyle::Normal => ValueKind::Normal,
-            WaveStyle::Warn   => ValueKind::Warn,
-            WaveStyle::Error  => ValueKind::Warn,
-            
-            WaveStyle::Undef => ValueKind::Undef,
-            WaveStyle::HighImp => ValueKind::HighImp,
+            WaveStyle::Default    => ValueKind::Normal,
+            WaveStyle::Error      => ValueKind::Warn,
+            WaveStyle::Hidden     => unreachable!(),
+            WaveStyle::Inherit(_) => unreachable!(),
+
+            WaveStyle::Normal   => ValueKind::Normal,
+            WaveStyle::Warn     => ValueKind::Warn,
+            WaveStyle::Undef    => ValueKind::Undef,
+            WaveStyle::HighImp  => ValueKind::HighImp,
             WaveStyle::DontCare => ValueKind::DontCare,
-            WaveStyle::Weak => ValueKind::Weak,
+            WaveStyle::Weak     => ValueKind::Weak,
 
             WaveStyle::Color(c) => ValueKind::Custom(c),
             WaveStyle::Var(..) => {
