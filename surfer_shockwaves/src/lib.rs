@@ -397,7 +397,11 @@ impl State {
             }
             TranslatorVariant::Duplicate(n,t) => {
                 let translation = self.translate_with(t,value);
-                Translation(translation.0.clone(),vec![(n.clone(),translation)])
+                let render = match &translation.0 {
+                    Some((v,_,p)) => Some((v.clone(),WaveStyle::Inherit(0),*p)),
+                    None => None,
+                };
+                Translation(render,vec![(n.clone(),translation)])
             },
             TranslatorVariant::Number{format ,spacer} => {
                 fn apply_spacer(sp:&NumberSpacer,v:String) -> String {
