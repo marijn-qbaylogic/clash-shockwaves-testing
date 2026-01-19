@@ -7,12 +7,18 @@ Values are constructed from their subvalues.
 
 module Clash.Shockwaves.Internal.Translator where
 
-import Clash.Prelude hiding (sub)
-import Clash.Shockwaves.Internal.Types
+import           Clash.Prelude hiding (sub)
+import           Clash.Shockwaves.Internal.BitList
+import qualified Clash.Shockwaves.BitList as BL
+import           Clash.Shockwaves.Internal.Types
 import qualified Data.List as L
-import Data.Maybe (mapMaybe)
-import Data.Bifunctor (first)
-import Clash.Shockwaves.Internal.Util
+import           Data.Maybe (fromMaybe, isJust)
+import           Data.Bifunctor (first)
+import           Clash.Shockwaves.Internal.Util
+import           Data.List.Extra (chunksOf)
+import           Numeric (showHex)
+import           Math.NumberTheory.Logarithms (intLog2)
+import           Data.Tuple.Extra (second)
 
 
 -- | Apply a 'WaveStyle' to a 'Translation'
@@ -21,7 +27,7 @@ applyStyle s (Translation r sb) = Translation (applyStyleR s r) sb
 
 -- | Apply a 'WaveStyle' to a 'Render' value
 applyStyleR :: WaveStyle -> Render -> Render
-applyStyleR s (Just (l,WSNormal,p)) = Just (l,s,p)
+applyStyleR s (Just (l,WSDefault,p)) = Just (l,s,p)
 applyStyleR _ r = r
 
 -- | Render some error message. The precedence is set to 11 (i.e. an atomic).
@@ -91,7 +97,7 @@ filterSignals = L.filter ((/="") . fst)
 -- and translate the value recursively.
 translateFromSubs :: Translator -> [(SubSignal,Translation)] -> Translation
 translateFromSubs (Translator _ translator) subs = case translator of
-  TRef _ _ -> case subs of
+  TRef _ _ _ -> case subs of
     [("",t)] -> t
     _ -> errorX "Ref should only appear as a nested type that is translated through split; for referenced types, modify Waveform.translate"
   TLut _ _ -> case subs of
@@ -100,7 +106,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
   TNumber{} -> case subs of
     [("",t)] -> t
     _ -> errorX "Number translators require a custom implementation of Waveform.translate that does not call render"
-  
+
   -- normal
   TSum _ -> case subs of
     [(_,t)] -> t
@@ -109,7 +115,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
     { start, sep, stop
     , labels
     , preci, preco
-    } -> Translation (Just (v,WSNormal,preco)) $ filterSignals subs
+    } -> Translation (Just (v,WSDefault,preco)) $ filterSignals subs
       where
         labels' = L.map Just labels <> L.repeat Nothing
         subs' = applyPrecL preci subs
@@ -131,7 +137,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
             (    start
               <> joinWith sep (L.map (getVal . applyPrec preci . snd) subs)
               <> stop
-            , WSNormal, preco )
+            , WSDefault, preco )
         else
           renError "{values missing}"
 
@@ -145,13 +151,11 @@ translateFromSubs (Translator _ translator) subs = case translator of
 -- the structure of a constant translation.
 structure :: Translator -> Structure
 structure (Translator _ t) = case t of
-  TRef _ s -> s
+  TRef _ s _ -> s
   TSum ts -> Structure subs
     where subs = L.concatMap (getS . structure) ts
           getS (Structure s) = s
-  TProduct{subs} -> Structure (mapMaybe go subs)
-    where go (Nothing,_) = Nothing
-          go (Just n, t') = Just (n, structure t')
+  TProduct{subs} -> Structure  $ L.map (second structure) subs
   TConst _ -> Structure [] -- TODO: derive from value
   TLut _ s -> s
   TNumber{} -> Structure []
@@ -161,3 +165,87 @@ structure (Translator _ t) = case t of
    where enumerate = L.zip [(0::Int)..]
   TStyled _ t' -> structure t'
   TDuplicate n t' -> Structure [(n,structure t')]
+
+
+translateBinWith :: Translator -> BitList -> Translation
+translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
+  | width <= blLength = case variant of
+    TRef _ _ btf -> btf bin
+    TLut _ _ -> errorX "Can't translate binary data with TLut."
+    TNumber{format,spacer} -> Translation (if isJust render then render else Just ("undefined",WSError,11) ) []
+      where
+        bin' = show bin
+        render :: Render
+        render = (\(v,s,p) -> (applySpacer spacer v,s,p)) <$> case format of
+          NFBin -> Just ("0b"<>bin'                             , undefstyle, 11)
+          NFOct -> Just ("0o"<>(hexDigit <$> chunksOf 3 extend3), undefstyle, 11)
+          NFHex -> Just ("0x"<>(hexDigit <$> chunksOf 4 extend4), undefstyle, 11)
+          NFUns -> (\i -> (show i, WSDefault, 11)) <$> decodeUns 0 bin'
+          NFSig -> (\i -> (show i, WSDefault, if i>=0 then 11 else 0)) <$> decodeSig bin' --todo: decode, translate, format etc.
+        undefbits = 'x' `elem` bin'
+        undefstyle = if undefbits then WSError else WSDefault
+        extend3 = L.replicate (2 - ((n+2) `rem` 3)) '0' <> bin'
+        extend4 = L.replicate (3 - ((n+3) `rem` 4)) '0' <> bin'
+        n = fromIntegral $ maybe 0 fst spacer :: Int
+        hexDigit :: String -> Char
+        hexDigit b = fromMaybe 'x' (((`showHex` "") <$> decodeUns 0 b :: Maybe String) >>= ((fst <$>) . L.uncons))
+
+    -- normal
+    TSum subs -> translation
+      where
+        k = intLog2 $ L.length subs * 2 - 1
+        (b,b') = BL.split k bin
+        translation = maybe
+          (errorT "undefined")
+          (\v -> translateBinWith (subs L.!! fromIntegral v) b') --translate with selected translator
+          (toInt b)
+
+    TProduct{ subs }
+      -> translateFromSubs trans subTs
+      where
+        subTs = carryFoldl go bin subs 
+        go b (lbl,t@(Translator w _)) = let (b',b'') = BL.split w b in (b'',(lbl,translateBinWith t b'))
+
+    TConst t -> t
+
+    TArray{ sub=sub@(Translator w _), len}
+      -> translateFromSubs trans subTs
+      where
+        subTs = enumLabel $ L.map (("",) . translateBinWith sub) $ carryFoldl go bin [0..len-1]
+        go b _ = let (b',b'') = BL.split w b in (b'',b')
+    
+
+    -- recursive
+    TStyled sty t -> applyStyle sty $ translateBinWith t bin
+    TDuplicate n t -> Translation ren' [(n,t')]
+      where t' = translateBinWith t bin
+            Translation ren _ = t'
+            ren' = (\(v,_,p) -> (v,WSInherit 0,p)) <$> ren
+  | otherwise = errorX $ "BitList length ("<>show blLength<>") is smaller than translator length ("<>show width<>")"
+
+
+carryFoldl :: (a -> b -> (a,c)) -> a -> [b] -> [c]
+carryFoldl _ _ [] = []
+carryFoldl f i (x:xs) = y:carryFoldl f i' xs
+  where (i',y) = f i x
+
+-- applySpacer (0,_) num = num
+-- applySpacer (_,"") num = num
+-- applySpacer (k,s) num = sign <> joinWith s parts
+--   where
+--     (sign,digits) = case num of
+--       sign@'-':digits -> (sign:"",digits)
+--       digits          -> (     "",digits)
+--     parts = reverse $ map reverse $ chunksOf k $ L.reverse digits
+
+decodeUns :: Integer -> String -> Maybe Integer
+decodeUns k ""      = Just k
+decodeUns k ('0':r) = decodeUns (k*2) r
+decodeUns k ('1':r) = decodeUns (k*2+1) r
+decodeUns _ _       = Nothing
+
+decodeSig :: String -> Maybe Integer
+decodeSig ""      = Just 0
+decodeSig ('0':r) = decodeUns 0 r
+decodeSig ('1':r) = decodeUns (-1) r
+decodeSig _       = Nothing

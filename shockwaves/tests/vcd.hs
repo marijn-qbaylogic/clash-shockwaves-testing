@@ -9,14 +9,14 @@ module Main where
 
 import Clash.Prelude
 import Clash.Shockwaves
-import Clash.Shockwaves.LUT
+-- import Clash.Shockwaves.LUT
 import Clash.Shockwaves.Trace as T
 
 import Tests.Types
 
 import Data.Text as Text
-import Data.Proxy
-import Data.Typeable
+-- import Data.Proxy
+-- import Data.Typeable
 import qualified Data.List as L
 
 import System.Directory
@@ -27,6 +27,7 @@ createDomain vSystem{vName="Dom50", vPeriod=hzToPeriod 50e6}
 undef :: a
 undef = Clash.Prelude.undefined
 
+tests :: [(String, R'->R')]
 tests =
   [ test "S"  $ values [S,undef]
   , test "M"  $ values [Ma,Mb,Mc,undef]

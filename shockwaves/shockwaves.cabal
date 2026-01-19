@@ -89,6 +89,7 @@ common common-options
     filepath,
     split,
     extra,
+    integer-logarithms,
 
     -- clash-prelude will set suitable version bounds for the plugins
     clash-prelude >= 1.8.2 && < 1.10,
@@ -110,9 +111,10 @@ library
     Clash.Shockwaves.Style.Colors
     Clash.Shockwaves.Trace
     Clash.Shockwaves.Trace.CRE
+    Clash.Shockwaves.BitList
     Clash.Shockwaves.Internal.Types
     Clash.Shockwaves.Internal.Waveform
-    Clash.Shockwaves.Internal.Binary
+    Clash.Shockwaves.Internal.BitList
     Clash.Shockwaves.Internal.Translator
     Clash.Shockwaves.Internal.Util
     Clash.Shockwaves.Internal.Trace.CRE

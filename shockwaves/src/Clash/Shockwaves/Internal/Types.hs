@@ -10,21 +10,22 @@ Type definitions for Shockwaves.
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Clash.Shockwaves.Internal.Types where
-import Clash.Prelude hiding (sub)
+module           Clash.Shockwaves.Internal.Types where
+import           Clash.Prelude hiding (sub)
+import           Clash.Shockwaves.Internal.BitList (BitList)
 import qualified Data.List as L
-import Data.Map as M
-import Data.Data (Typeable)
+import           Data.Map as M
+import           Data.Data (Typeable)
 
-import Data.Aeson hiding (Value)
-import Data.Colour.SRGB (RGB(..), toSRGB24, Colour)
-import Data.Word (Word8)
-import Control.DeepSeq (NFData (rnf))
-import Data.String (IsString)
-import GHC.Exts (IsString(fromString))
-import Data.Colour.Names (readColourName)
-import Data.Maybe (fromJust)
-import Data.Char (digitToInt)
+import           Data.Aeson hiding (Value)
+import           Data.Colour.SRGB (RGB(..), toSRGB24, Colour)
+import           Data.Word (Word8)
+import           Control.DeepSeq (NFData (rnf))
+import           Data.String (IsString)
+import           GHC.Exts (IsString(fromString))
+import           Data.Colour.Names (readColourName)
+import           Data.Maybe (fromJust)
+import           Data.Char (digitToInt)
 
 -- some type aliases for clarity
 type TypeName = String
@@ -40,8 +41,6 @@ type Prec = Integer
 type Render = Maybe (Value, WaveStyle, Prec)
 -- ^ Rendered value. This can be @Nothing@ is the value does not exists,
 -- or a tuple of the text representation, style, and precedence.
-type BinRep = String
--- ^ Binary representation of a haskell value (like 'BitVector', but arbitrarily sized).
 type LUTName = TypeName
 -- ^ Reference to a LUT.
 
@@ -53,7 +52,7 @@ type TypeMap = Map TypeName Translator
 -- | Table of LUTs. Usually, the index is a type name, but this is not necessarily the case.
 type LUTMap = Map LUTName LUT
 -- | A lookup table of 'Translation's.
-type LUT = Map BinRep Translation
+type LUT = Map BitList Translation
 
 type Color = RGB Word8
 -- ^ The color type used in 'WaveStyle'.
@@ -67,13 +66,18 @@ data Translation
 
 -- | The style in which a signal should be displayed.
 data WaveStyle
-  = WSNormal -- ^ The default waveform style.
-  | WSWarn -- ^ A warning value.
+  = WSDefault -- ^ The default waveform style. This is the only style overwritten by TStyled.
   | WSError -- ^ An error value. Errors are propagated by translators.
+  | WSHidden -- ^ Do not display any value, even if it exists.
+  | WSInherit Natural -- ^ Copy the style of the nth subsignal.
+
+  | WSNormal -- ^ Surfer's default signal style.
+  | WSWarn -- ^ A warning value.
   | WSUndef -- ^ An undefined value.
   | WSHighImp -- ^ A high impedance value.
   | WSDontCare -- ^ A value that does not matter.
   | WSWeak -- ^ A weakly defined value.
+
   | WSColor Color -- ^ A custom color. See "Clash.Shockwaves.Style" for more information.
   | WSVar String WaveStyle -- ^ A variable in a style configuration file, with a default.
   deriving (Show, Generic, Eq)
@@ -101,13 +105,19 @@ newtype Structure
 -- translates, as well as a 'TranslatorVariant' that determines the translation algorithm.
 data Translator = Translator Int TranslatorVariant deriving (Show)
 
+type BinTranslatorFunction = BitList -> Translation
+
+instance Show BinTranslatorFunction where
+  show _ = "*"
+
+
 -- | The translation algorithm used.
 data TranslatorVariant
   -- | Use the translator of a different type. Note that the width value of the
   -- 'Translator's should still match. The structure is only used so that the
   -- structure can be reconstructed from the translator alone, and is not
   -- actually stored in the final output.
-  = TRef TypeName Structure
+  = TRef TypeName Structure BinTranslatorFunction
 
   -- | A reference to a lookup table.
   | TLut LUTName Structure
@@ -130,12 +140,12 @@ data TranslatorVariant
   --   , sep = ","
   --   , stop = "}"
   --   , labels = ["a=","b="]
-  --   , preci = 0
+  --   , preci = -1
   --   , preco = 11
   --   }
   -- @
   | TProduct
-    { subs          :: [(Maybe SubSignal, Translator)] -- ^ List of fields to translate.
+    { subs          :: [(SubSignal, Translator)] -- ^ List of fields to translate.
     , start        :: Value -- ^ Text to insert at the start of the value.
     , sep          :: Value -- ^ Text to use to separate values.
     , stop         :: Value -- ^ Text to insert at the end of the value.
@@ -145,10 +155,6 @@ data TranslatorVariant
     -- Else, the length must match that of @subs@, and provided values are inserted.
     , preci        :: Prec -- ^ Inner precedence: used on subvalues.
     , preco        :: Prec -- ^ Outer precedence: used for the combined value.
-    , style        :: Int
-    -- ^ Select which field should be used to determine the style.
-    -- If no style is present in this field, or style is set to -1,
-    -- use the default style instead.
     }
 
   -- | An array value. This behaves much like 'TProduct', except that no labels
@@ -202,9 +208,9 @@ instance IsString WaveStyle where
 instance ToJSON Translator where
   toJSON (Translator w v) = object ["w" .= w, "v" .= v']
     where v' = case v of
-                TRef n _ -> object ["R" .= n]
+                TRef n _ _ -> object ["R" .= n]
                 TSum subs -> object ["S" .= toJSON subs]
-                TProduct{subs,start,sep,stop,labels,preci,preco,style} ->
+                TProduct{subs,start,sep,stop,labels,preci,preco} ->
                   object
                     ["P" .= object
                       [ "t" .= toJSON subs
@@ -213,8 +219,7 @@ instance ToJSON Translator where
                       , "]" .= stop
                       , "n" .= labels
                       , "p" .= preci
-                      , "P" .= preco
-                      , "s" .= style ]]
+                      , "P" .= preco ]]
                 TConst t -> object ["C" .= toJSON t]
                 TLut lut s -> object ["L" .= [toJSON lut,toJSON s]]
                 TNumber{format,spacer} -> object ["N" .= object
@@ -233,13 +238,16 @@ instance ToJSON Translator where
 
 instance ToJSON WaveStyle where
   toJSON = \case
-    WSNormal   -> "N"
-    WSWarn     -> "W"
-    WSError    -> "E"
-    WSUndef    -> "U"
-    WSHighImp  -> "Z"
-    WSDontCare -> "X"
-    WSWeak     -> "Q"
+    WSDefault   -> "D"
+    WSError     -> "E"
+    WSHidden    -> "H"
+    WSInherit n -> object ["I" .= [n]]
+    WSNormal    -> "N"
+    WSWarn      -> "W"
+    WSUndef     -> "U"
+    WSHighImp   -> "Z"
+    WSDontCare  -> "X"
+    WSWeak      -> "Q"
     WSColor (RGB r g b) -> object ["C" .= [r,g,b,255]]
     WSVar var dflt -> object ["V" .= [toJSON var, toJSON dflt]]
 instance ToJSON NumberFormat where
