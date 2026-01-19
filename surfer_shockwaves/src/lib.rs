@@ -332,6 +332,8 @@ impl State {
             translation.prop_errors();
         }
 
+        translation.prop_style_inherit();
+
         //fill out missing unknown fields
         translation.fill(&structure);
         
@@ -790,22 +792,6 @@ impl Translation {
                 subfields,
             },
 
-            // Inherit style
-            Some((val,WaveStyle::Inherit(n),_prec)) => {
-                let kind = if let Some(SubFieldTranslationResult{result:TranslationResult{kind,..},..}) = subfields.get(n) {
-                    kind.clone()
-                } else {
-                    error!("Attempt to inherit style from nonexistent subsignal {n}");
-                    ValueKind::Warn
-                };
-
-                TranslationResult{
-                    val: ValueRepr::String(val),
-                    kind,
-                    subfields
-                }
-            }
-
             // Other styles
             Some((val,style,_prec)) => TranslationResult{
                 val: ValueRepr::String(val),
@@ -854,6 +840,24 @@ impl Translation {
             _ => false,
         }
     }
+
+    /// Fill in inherited styles
+    fn prop_style_inherit(&mut self) {
+        self.1.iter_mut().for_each(|(_n,t)| t.prop_style_inherit());
+
+
+        let n = if let Some((_val,WaveStyle::Inherit(n),_p)) = &self.0 {
+            n
+        } else {return};
+
+        self.0.as_mut().unwrap().1 = if let Some((_name,Translation(Some((_v,s,_p)),_))) = self.1.get(*n) {
+            s.clone()
+        } else {
+            error!("Attempt to inherit style from nonexistent subsignal {n}");
+            WaveStyle::Warn
+        };
+    }
+
     /// Replace variables with actual wavestyles
     fn replace_wavestyles(&mut self,conf:&mut Config) {
         self.0.as_mut().map(|(_,s,_)| s.replace_wavestyles(conf));
