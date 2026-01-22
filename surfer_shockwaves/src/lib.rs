@@ -147,6 +147,16 @@ enum TranslatorVariant {
 
     #[serde(alias = "S")]
     Sum(Vec<Translator>),
+
+    #[serde(alias = "S+")]
+    AdvancedSum {
+        #[serde(alias = "i")]
+        index: (usize,usize),
+        #[serde(alias = "d")]
+        default_translator: Box<Translator>,
+        #[serde(alias = "t")]
+        range_translators: Vec<((u128,u128),Translator)>
+    },
     
     #[serde(alias = "P")]
     Product {
@@ -162,6 +172,18 @@ enum TranslatorVariant {
         labels: Vec<String>,
         #[serde(alias = "p")]
         preci: Prec,
+        #[serde(alias = "P")]
+        preco: Prec,
+    },
+
+    #[serde(alias = "P+")]
+    AdvancedProduct {
+        #[serde(alias = "t")]
+        slice_translators: Vec<((usize,usize),Translator)>,
+        #[serde(alias = "h")]
+        hierarchy: Vec<(String,usize)>,
+        #[serde(alias = "v")]
+        value_parts: Vec<ValuePart>,
         #[serde(alias = "P")]
         preco: Prec,
     },
@@ -203,7 +225,32 @@ enum TranslatorVariant {
 
     #[serde(alias = "D")]
     Duplicate(String,Box<Translator>),
+
+    #[serde(alias = "B")]
+    ChangeBits {
+        sub: Box<Translator>,
+        bits: BitPart,
+    },
 }
+
+#[derive(Serialize,Deserialize,Debug,Clone)]
+enum ValuePart {
+    #[serde(alias = "L")]
+    Lit(String),
+    #[serde(alias = "R")]
+    Ref(usize,Prec)
+}
+
+#[derive(Serialize,Deserialize,Debug,Clone)]
+enum BitPart {
+    #[serde(alias = "C")]
+    Concat(Vec<BitPart>),
+    #[serde(alias = "L")]
+    Lit(String),
+    #[serde(alias = "S")]
+    Slice((usize,usize)),
+}
+
 
 #[derive(Serialize,Deserialize,Debug,Clone,Copy)]
 enum NumberFormat {
@@ -259,6 +306,18 @@ fn signal_name(signal:&VariableMeta) -> String {
     signal.var.path.strs.join(".")+"."+&signal.var.name
 }
 
+fn val_with_prec(translation: &Translation, preco: Prec) -> Vec<&str> {
+    match &translation.0 {
+        Some((value,_,preci)) => {
+            if *preci>preco {
+                vec![value]
+            } else {
+                vec!["(",value,")"]
+            }
+        },
+        None => vec!["{value missing}"],
+    }
+}
 
 // main functions
 
@@ -462,7 +521,7 @@ impl State {
                         }
                     },
                     NumberFormat::Bin   => (apply_spacer(&spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Default},11),
-                    _ => error("{number format not implemented yet}").0.unwrap() // TODO: add oct and hex number formats
+                    _ => todo!() //error("{number format not implemented yet}").0.unwrap() // TODO: add oct and hex number formats
                 }),vec![])
             },
             TranslatorVariant::Product { subs, start, sep, stop, labels, preci, preco } => {
@@ -476,17 +535,18 @@ impl State {
                 let vals: Vec<&str> = if labels.len()!=0 {
                     let mut res: Vec<&str> = vec![start];
                     for (i,(l,(_,t))) in zip(0..,zip(labels,sub.iter())) {
-                        let p = match t.0 {
-                            Some((_,_,p)) => p,
-                            None => 11
-                        };
+                        // let p = match t.0 {
+                        //     Some((_,_,p)) => p,
+                        //     None => 11
+                        // };
                         res.push(l);
-                        if p <= *preci {res.push("(");}
-                        res.push(match &t.0 {
-                            Some((v,_,_)) => v,
-                            None => "{value missing}",
-                        });
-                        if p <= *preci {res.push(")");}
+                        // if p <= *preci {res.push("(");}
+                        // res.push(match &t.0 {
+                        //     Some((v,_,_)) => v,
+                        //     None => "{value missing}",
+                        // });
+                        // if p <= *preci {res.push(")");}
+                        res.extend(val_with_prec(t,*preci));
                         if i!=subs.len()-1 {res.push(sep);}
                     }
                     res.push(stop);
@@ -494,28 +554,37 @@ impl State {
                 } else {
                     let mut res: Vec<&str> = vec![start];
                     for (i,(_,t)) in zip(0..,sub.iter()) {
-                        let p = match t.0 {
-                            Some((_,_,p)) => p,
-                            None => 11
-                        };
-                        if p <= *preci {res.push("(");}
-                        res.push(match &t.0 {
-                            Some((v,_,_)) => &v,
-                            None => "{value missing}",
-                        });
-                        if p <= *preci {res.push(")");}
+                        // let p = match t.0 {
+                        //     Some((_,_,p)) => p,
+                        //     None => 11
+                        // };
+                        // if p <= *preci {res.push("(");} // TODO: remove this commented code after verifying the new code works
+                        // res.push(match &t.0 {
+                        //     Some((v,_,_)) => &v,
+                        //     None => "{value missing}",
+                        // });
+                        // if p <= *preci {res.push(")");}
+                        res.extend(val_with_prec(t,*preci));
                         if i!=subs.len()-1 {res.push(sep);}
                     }
                     res.push(stop);
                     res
                 };
-                let val = vals.join("");
+                let val = vals.concat();//join("");
 
                 Translation(
                     Some((val,WaveStyle::Default,*preco)),
                     // filter out subsignals without labels
                     sub
                 )
+            },
+            TranslatorVariant::AdvancedProduct{slice_translators,hierarchy,value_parts,preco} => {
+                let translations: Vec<_> = slice_translators.iter().map(|((a,b),t)| self.translate_with(t,&value[*a..*b])).collect();
+
+                let value = value_parts.iter().map(|vp| vp.make_value(&translations)).collect::<Vec<_>>().concat();
+
+                let subs = hierarchy.iter().map(|(n,i)| (n.clone(),translations[*i].clone())).collect();
+                Translation(Some((value,WaveStyle::Default,*preco)),subs)
             },
             TranslatorVariant::Ref(ty) => {
                 self.translate_with(&self.data.get_translator(ty),value)
@@ -533,6 +602,20 @@ impl State {
                     Err(_) => error("unknown"),
                 }
             },
+            TranslatorVariant::AdvancedSum{index: (a,b),default_translator,range_translators} => {
+                match u128::from_str_radix(&value[*a..*b],2) {
+                    Ok(key) => {
+                        for ((lo,hi),translator) in range_translators {
+                            if *lo<=key && key<*hi {
+                                return self.translate_with(translator,value);
+                            }
+                        } 
+                        self.translate_with(default_translator,value)
+
+                    },
+                    Err(_) => error("unknown"),
+                }
+            },
             TranslatorVariant::Styled(s, t) => {
                 let translation = self.translate_with(t,value);
                 match translation {
@@ -540,10 +623,32 @@ impl State {
                     trans => trans,
                 }
             },
+            TranslatorVariant::ChangeBits{sub,bits} => {
+                self.translate_with(sub,&bits.from(value))
+            },
         };
 
         fn error(msg: &str) -> Translation {
             Translation(Some((String::from(msg),WaveStyle::Error,11)),vec![])
+        }
+    }
+}
+
+impl ValuePart {
+    fn make_value(&self,translations: &Vec<Translation>) -> String {
+        match self {
+            ValuePart::Lit(s) => s.clone(),
+            ValuePart::Ref(i,p) => val_with_prec(&translations[*i],*p).concat(),
+        }
+    }
+}
+
+impl BitPart {
+    fn from(&self, bits: &str) -> String {
+        match self {
+            BitPart::Concat(bps) => bps.iter().map(|bp| bp.from(bits)).collect::<Vec<_>>().concat(),
+            BitPart::Lit(s) => s.to_string(),
+            BitPart::Slice((a,b)) => bits[*a..*b].to_string(),
         }
     }
 }
@@ -578,11 +683,23 @@ impl Data {
                 ).flatten().collect();
                 Structure(ts)
             },
+            TranslatorVariant::AdvancedSum{default_translator,range_translators,..} => {
+                let mut ts: Vec<_> = range_translators.iter().map(|(_,t)|
+                    self.trans_structure(t).0
+                ).flatten().collect();
+                ts.extend(self.trans_structure(default_translator).0);
+                Structure(ts)
+            },
             TranslatorVariant::Product{subs, ..} => Structure(
                 subs.iter()
                     .map(|(name,t)| (name.clone(), self.trans_structure(t)))
                     .collect()
-                ),
+            ),
+            TranslatorVariant::AdvancedProduct{slice_translators,hierarchy,..} => Structure(
+                hierarchy.iter()
+                    .map(|(n,i)| (n.clone(),self.trans_structure(&slice_translators[*i].1)))
+                    .collect()
+            ),
             TranslatorVariant::Const(t) => Structure::from_trans(t),
             TranslatorVariant::Lut(_, structure) => structure.clone(),
             TranslatorVariant::Number{..} => Structure(vec![]),
@@ -595,6 +712,7 @@ impl Data {
             TranslatorVariant::Duplicate(name,translator) => Structure(
                 vec![(name.clone(),self.trans_structure(translator))]
             ),
+            TranslatorVariant::ChangeBits{sub,..} => self.trans_structure(sub),
         }
     }
 
@@ -905,17 +1023,30 @@ impl TranslatorVariant {
     fn replace_wavestyles(&mut self, conf:&mut Config) {
         match self {
             TranslatorVariant::Ref(_) => {},
-            TranslatorVariant::Sum(subs) => subs.iter_mut().for_each(|t|t.replace_wavestyles(conf)),
-            TranslatorVariant::Product{subs,..} => subs.iter_mut().for_each(|(_,t)|t.replace_wavestyles(conf)),
-            TranslatorVariant::Const(t) => t.replace_wavestyles(conf),
+            TranslatorVariant::Sum(subs) =>
+                subs.iter_mut().for_each(|t|t.replace_wavestyles(conf)),
+            TranslatorVariant::AdvancedSum{default_translator,range_translators,..} => {
+                default_translator.replace_wavestyles(conf);
+                range_translators.iter_mut().for_each(|(_,t)| t.replace_wavestyles(conf));
+            },
+            TranslatorVariant::Product{subs,..} =>
+                subs.iter_mut().for_each(|(_,t)|t.replace_wavestyles(conf)),
+            TranslatorVariant::AdvancedProduct{slice_translators,..} =>
+                slice_translators.iter_mut().for_each(|(_,t)| t.replace_wavestyles(conf)),
+            TranslatorVariant::Const(t) =>
+                t.replace_wavestyles(conf),
             TranslatorVariant::Lut(..) => {},
             TranslatorVariant::Number{..} => {},
-            TranslatorVariant::Array{sub,..} => sub.replace_wavestyles(conf),
+            TranslatorVariant::Array{sub,..} =>
+                sub.replace_wavestyles(conf),
             TranslatorVariant::Styled(style, translator) => {
                 style.replace_wavestyles(conf);
                 translator.replace_wavestyles(conf);
             },
-            TranslatorVariant::Duplicate(_, t) => t.replace_wavestyles(conf),
+            TranslatorVariant::Duplicate(_, t) =>
+                t.replace_wavestyles(conf),
+            TranslatorVariant::ChangeBits{sub,..} =>
+                sub.replace_wavestyles(conf),
         }
     }
 }
