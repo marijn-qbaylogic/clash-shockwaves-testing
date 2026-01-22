@@ -1,9 +1,9 @@
 
 module Clash.Shockwaves.BitList (
   BitList,
-  take,drop,split,
+  take,drop,split,concat,slice,
   binPack,binUnpack,
-  toInt,
+  toInteger,
   bvToBl,blToBv,
 ) where
 import Clash.Shockwaves.Internal.BitList

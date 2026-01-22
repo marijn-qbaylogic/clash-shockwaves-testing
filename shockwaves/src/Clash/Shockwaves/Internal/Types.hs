@@ -144,6 +144,15 @@ data TranslatorVariant
   --   , preco = 11
   --   }
   -- @
+
+  -- | Translate the *full* binary data based on what range the index slice is in.
+  -- If it is not in any of the ranges, use default instead.
+  | TAdvancedSum
+    { index :: Slice -- ^ Slice of inputs to use
+    , defTrans :: Translator -- ^ Default translator
+    , rangeTrans :: [(ISlice,Translator)] -- Ranges of indices and their translators.
+    }
+
   | TProduct
     { subs          :: [(SubSignal, Translator)] -- ^ List of fields to translate.
     , start        :: Value -- ^ Text to insert at the start of the value.
@@ -169,6 +178,14 @@ data TranslatorVariant
     , preco  :: Prec -- ^ Outer precedence: used for the combined value.
     }
 
+  -- | Advance product type
+  | TAdvancedProduct
+    { sliceTrans :: [(Slice,Translator)]
+    , hierarchy :: [(SubSignal,Int)]
+    , valueParts :: [ValuePart]
+    , preco :: Prec
+    }
+
   -- | Translate a value only if the first bit of the binary representation is
   -- @1@. If it is @0@, display nothing.
   | TDuplicate SubSignal Translator
@@ -176,6 +193,12 @@ data TranslatorVariant
   -- | Apply a style to a translation.
   -- Does not change the structure.
   | TStyled WaveStyle Translator
+
+  -- | Modify the binary input of the contained translator
+  | TChangeBits
+    { sub  :: Translator
+    , bits :: BitPart
+    }
 
   -- | A numerical value.
   | TNumber
@@ -191,7 +214,22 @@ data TranslatorVariant
 
   deriving (Show)
 
+-- | Parts of the binary output of 'TChangeBits'.
+data BitPart
+  = BPConcat [BitPart] -- ^ Concatenate sets of bits
+  | BPLit BitList -- ^ Literal bits
+  | BPSlice Slice -- ^ Slice of input
+  -- more to be added later
+  deriving (Show)
 
+-- | Parts of the value of 'TAdvancedProduct'.
+data ValuePart
+  = VPLit String -- ^ A literal string.
+  | VPRef Int Prec -- ^ The value of a subtranslation parsed with outer precedence.
+  deriving (Show)
+
+type Slice = (Int, Int)
+type ISlice = (Integer,Integer)
 
 instance IsString WaveStyle where
   fromString ('#':hex) = WSColor $ go $ L.map (fromIntegral . digitToInt) hex
@@ -204,37 +242,56 @@ instance IsString WaveStyle where
       WSColor . toSRGB24 . fromJust
     $ (readColourName s :: (Maybe (Colour Double)))
 
+instance ToJSON BitPart where
+  toJSON (BPConcat bp) = object ["C" .= bp]
+  toJSON (BPLit bl)    = object ["L" .= show bl]
+  toJSON (BPSlice s)   = object ["S" .= s]
+
+instance ToJSON ValuePart where
+  toJSON (VPLit s)   = object ["L" .= s]
+  toJSON (VPRef i p) = object ["R" .= [toJSON i, toJSON p]]
 
 instance ToJSON Translator where
   toJSON (Translator w v) = object ["w" .= w, "v" .= v']
     where v' = case v of
                 TRef n _ _ -> object ["R" .= n]
                 TSum subs -> object ["S" .= toJSON subs]
+                TAdvancedSum{index,defTrans,rangeTrans} -> object ["S+" .= object
+                  [ "i" .= index
+                  , "d" .= defTrans
+                  , "t" .= rangeTrans ]]
                 TProduct{subs,start,sep,stop,labels,preci,preco} ->
-                  object
-                    ["P" .= object
-                      [ "t" .= toJSON subs
-                      , "[" .= start
-                      , "," .= sep
-                      , "]" .= stop
-                      , "n" .= labels
-                      , "p" .= preci
-                      , "P" .= preco ]]
+                  object ["P" .= object
+                    [ "t" .= subs
+                    , "[" .= start
+                    , "," .= sep
+                    , "]" .= stop
+                    , "n" .= labels
+                    , "p" .= preci
+                    , "P" .= preco ]]
                 TConst t -> object ["C" .= toJSON t]
                 TLut lut s -> object ["L" .= [toJSON lut,toJSON s]]
                 TNumber{format,spacer} -> object ["N" .= object
                   [ "f" .= format
                   , "s" .= spacer]]
                 TArray{sub,len,start,sep,stop,preci,preco} -> object ["A" .= object
-                  [ "t" .= toJSON sub
+                  [ "t" .= sub
                   , "l" .= len
                   , "[" .= start
                   , "," .= sep
                   , "]" .= stop
                   , "p" .= preci
                   , "P" .= preco ]]
+                TAdvancedProduct{sliceTrans,hierarchy,valueParts,preco} -> object ["P+" .= object
+                  [ "t" .= sliceTrans
+                  , "h" .= hierarchy
+                  , "v" .= valueParts
+                  , "P" .= preco ]]
                 TStyled s t -> object ["X" .= [toJSON s,toJSON t]]
                 TDuplicate n t -> object ["D" .= [toJSON n,toJSON t]]
+                TChangeBits{sub,bits} -> object ["B" .= object
+                  [ "t" .= sub
+                  , "b" .= bits ]]
 
 instance ToJSON WaveStyle where
   toJSON = \case

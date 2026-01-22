@@ -2,7 +2,7 @@
 
 module Clash.Shockwaves.Internal.BitList where
 
-import           Clash.Prelude hiding (take,split)
+import           Clash.Prelude hiding (take,split,concat,drop)
 import           Clash.Sized.Internal.BitVector
 import           Data.Aeson hiding (Value)
 import           Data.String (IsString (fromString))
@@ -66,10 +66,23 @@ split n bv@(BL mm ii l) = (a,b)
     i' = shiftL i (l-n)
     b = BL (mm-m') (ii-i') (l-n)
 
+concat :: BitList -> BitList -> BitList
+concat (BL ma ia la) (BL mb ib lb) = BL m i l
+  where m = (ma `shiftL` lb) .|. mb
+        i = (ia `shiftL` lb) .|. ib
+        l = la + lb
 
-toInt :: BitList -> Maybe Int
-toInt (BL m i _) | m == 0 = Just $ fromIntegral i
-toInt _ = Nothing
+slice :: (Int,Int) -> BitList -> BitList
+slice (from,to) = drop from . take to 
+
+
+toInteger :: BitList -> Maybe Integer
+toInteger (BL m i _) | m == 0 = Just $ fromIntegral i
+toInteger _ = Nothing
+
+
+instance Semigroup BitList where
+  (<>) = concat
 
 
 

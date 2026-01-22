@@ -5,6 +5,8 @@ Values are constructed from their subvalues.
 
 -}
 
+{-# LANGUAGE OverloadedStrings #-}
+
 module Clash.Shockwaves.Internal.Translator where
 
 import           Clash.Prelude hiding (sub)
@@ -52,6 +54,7 @@ applyPrecR p (Just (v,s,p')) = if p'>p then Just (v,s,p')
                                else Just (parenthesize v, s, 11)
 applyPrecR _ Nothing = Nothing
 
+
 -- | Apply a precedence value to a list of subsignal translations.
 -- If the precedence is higher or equal to that of the current value,
 -- it is wrapped in parentheses.
@@ -64,7 +67,7 @@ applyPrecL p = L.map (\(a,b) -> (a,applyPrec p b))
 getVal :: Translation -> Value
 getVal t = case t of
               Translation (Just (v,_,_)) _ -> v
-              _ -> "{Value missing}"
+              _ -> "{value missing}"
 
 
 -- | Remove subsignal translators that do not have a subsignal name.
@@ -97,7 +100,7 @@ filterSignals = L.filter ((/="") . fst)
 -- and translate the value recursively.
 translateFromSubs :: Translator -> [(SubSignal,Translation)] -> Translation
 translateFromSubs (Translator _ translator) subs = case translator of
-  TRef _ _ _ -> case subs of
+  TRef{} -> case subs of
     [("",t)] -> t
     _ -> errorX "Ref should only appear as a nested type that is translated through split; for referenced types, modify Waveform.translate"
   TLut _ _ -> case subs of
@@ -106,6 +109,9 @@ translateFromSubs (Translator _ translator) subs = case translator of
   TNumber{} -> case subs of
     [("",t)] -> t
     _ -> errorX "Number translators require a custom implementation of Waveform.translate that does not call render"
+  TChangeBits{} -> errorX "translator not supported"
+  TAdvancedSum{} -> errorX "translator not supported"
+  TAdvancedProduct{} -> errorX "translator not supported"
 
   -- normal
   TSum _ -> case subs of
@@ -155,6 +161,7 @@ structure (Translator _ t) = case t of
   TSum ts -> Structure subs
     where subs = L.concatMap (getS . structure) ts
           getS (Structure s) = s
+  TAdvancedSum{rangeTrans,defTrans} -> structure $ Translator 0 $ TSum (defTrans : L.map snd rangeTrans)
   TProduct{subs} -> Structure  $ L.map (second structure) subs
   TConst _ -> Structure [] -- TODO: derive from value
   TLut _ s -> s
@@ -163,8 +170,11 @@ structure (Translator _ t) = case t of
       Structure . L.map (first show) . enumerate
     $ L.replicate len $ structure sub
    where enumerate = L.zip [(0::Int)..]
+  TAdvancedProduct{sliceTrans,hierarchy} -> Structure $ L.map (second (structures L.!!)) hierarchy
+    where structures = L.map (structure . snd) sliceTrans
   TStyled _ t' -> structure t'
   TDuplicate n t' -> Structure [(n,structure t')]
+  TChangeBits{sub} -> structure sub
 
 
 translateBinWith :: Translator -> BitList -> Translation
@@ -179,7 +189,7 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
         render = (\(v,s,p) -> (applySpacer spacer v,s,p)) <$> case format of
           NFBin -> Just ("0b"<>bin'                             , undefstyle, 11)
           NFOct -> Just ("0o"<>(hexDigit <$> chunksOf 3 extend3), undefstyle, 11)
-          NFHex -> Just ("0x"<>(hexDigit <$> chunksOf 4 extend4), undefstyle, 11)
+          NFHex -> Just ("0X"<>(hexDigit <$> chunksOf 4 extend4), undefstyle, 11)
           NFUns -> (\i -> (show i, WSDefault, 11)) <$> decodeUns 0 bin'
           NFSig -> (\i -> (show i, WSDefault, if i>=0 then 11 else 0)) <$> decodeSig bin' --todo: decode, translate, format etc.
         undefbits = 'x' `elem` bin'
@@ -198,12 +208,20 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
         translation = maybe
           (errorT "undefined")
           (\v -> translateBinWith (subs L.!! fromIntegral v) b') --translate with selected translator
-          (toInt b)
+          (BL.toInteger b)
+    
+    TAdvancedSum{index,defTrans,rangeTrans} -> case BL.toInteger $ BL.slice index bin of
+      Just i -> translateBinWith t bin
+        where
+          t = fromMaybe defTrans $ asum $ L.map go rangeTrans
+          go ((a,b),t') | a<=i && i<b = Just t'
+                      | otherwise = Nothing
+      Nothing -> transError "undefined"
 
     TProduct{ subs }
       -> translateFromSubs trans subTs
       where
-        subTs = carryFoldl go bin subs 
+        subTs = carryFoldl go bin subs
         go b (lbl,t@(Translator w _)) = let (b',b'') = BL.split w b in (b'',(lbl,translateBinWith t b'))
 
     TConst t -> t
@@ -213,7 +231,15 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
       where
         subTs = enumLabel $ L.map (("",) . translateBinWith sub) $ carryFoldl go bin [0..len-1]
         go b _ = let (b',b'') = BL.split w b in (b'',b')
-    
+
+    TAdvancedProduct{sliceTrans,hierarchy,valueParts,preco} -> Translation ren subs
+      where
+        translations = L.map (\(s,translator) -> translateBinWith translator $ BL.slice s bin) sliceTrans
+        ren = Just (L.concatMap getValPart valueParts, WSDefault, preco)
+        subs = L.map (second (translations L.!!)) hierarchy
+
+        getValPart (VPLit s) = s
+        getValPart (VPRef i p) = getVal $ applyPrec p $ translations L.!! i
 
     -- recursive
     TStyled sty t -> applyStyle sty $ translateBinWith t bin
@@ -221,7 +247,15 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
       where t' = translateBinWith t bin
             Translation ren _ = t'
             ren' = (\(v,_,p) -> (v,WSInherit 0,p)) <$> ren
+
+    TChangeBits{sub,bits} -> translateBinWith sub $ changeBits bits bin
   | otherwise = errorX $ "BitList length ("<>show blLength<>") is smaller than translator length ("<>show width<>")"
+
+
+changeBits :: BitPart -> BitList -> BitList
+changeBits (BPConcat bps) bin = L.foldl (<>) "" $ L.map (`changeBits` bin) bps
+changeBits (BPLit bl)    _bin = bl
+changeBits (BPSlice s)    bin = BL.slice s bin
 
 
 carryFoldl :: (a -> b -> (a,c)) -> a -> [b] -> [c]
