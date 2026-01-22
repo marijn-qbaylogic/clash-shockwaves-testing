@@ -494,7 +494,7 @@ impl State {
 
                 Translation(Some(match format {
                     NumberFormat::Sig   => {
-                        // slightly cursed way of doing this - convert to base 256 bytes, then to bigint, then to string
+                        // slightly cursed way of doing this - convert to base 256 (bytes), then to bigint, then to string
                         let n = (value.len()+7)/8;
                         let mut bytes = vec![0u8; n];
                         for i in 0..(8*n) {
@@ -521,7 +521,30 @@ impl State {
                         }
                     },
                     NumberFormat::Bin   => (apply_spacer(&spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Default},11),
-                    _ => todo!() //error("{number format not implemented yet}").0.unwrap() // TODO: add oct and hex number formats
+                    NumberFormat::Hex | NumberFormat::Oct => {
+                        let (chunksize, prefix) = match format {
+                            NumberFormat::Oct => (3,"0o"),
+                            NumberFormat::Hex => (4,"0X"),
+                            _ => unreachable!(),
+                        };
+                        let mut blocks = vec![];
+                        let mut block = vec![];
+                        for (i,c) in value.chars().enumerate() {
+                            block.push(format!("{}",c));
+                            if (value.len()-i-1) % chunksize == 0 {
+                                let chunk = block.concat();
+                                blocks.push(match u8::from_str_radix(&chunk,2) {
+                                    Ok(n) => format!("{:x}",n),
+                                    Err(_) => "x".to_string(),
+                                });
+                                block.clear();
+                            }
+                        }
+
+                        let val = prefix.to_owned() + &blocks.concat();
+                        let style = if val.contains("x") {WaveStyle::Error} else {WaveStyle::Default}; 
+                        (val,style,11)
+                    }
                 }),vec![])
             },
             TranslatorVariant::Product { subs, start, sep, stop, labels, preci, preco } => {
