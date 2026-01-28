@@ -14,6 +14,7 @@ import           Clash.Shockwaves.Internal.BitList
 import qualified Clash.Shockwaves.BitList as BL
 import           Clash.Shockwaves.Internal.Types
 import qualified Data.List as L
+import qualified Data.Map as M
 import           Data.Maybe (fromMaybe, isJust)
 import           Data.Bifunctor (first)
 import           Clash.Shockwaves.Internal.Util
@@ -22,15 +23,25 @@ import           Numeric (showHex)
 import           Math.NumberTheory.Logarithms (intLog2)
 import           Data.Tuple.Extra (second)
 
+-- | A folding function like scan that has separate output and continue values.
+carryFoldl :: (a -> b -> (a,c)) -> a -> [b] -> [c]
+carryFoldl _ _ [] = []
+carryFoldl f i (x:xs) = y:carryFoldl f i' xs
+  where (i',y) = f i x
 
--- | Apply a 'WaveStyle' to a 'Translation'
+
+
+
+-- | Apply a 'WaveStyle' to a 'Translation' value.
 applyStyle :: WaveStyle -> Translation -> Translation
 applyStyle s (Translation r sb) = Translation (applyStyleR s r) sb
 
--- | Apply a 'WaveStyle' to a 'Render' value
+-- | Apply a 'WaveStyle' to a 'Render' value.
 applyStyleR :: WaveStyle -> Render -> Render
 applyStyleR s (Just (l,WSDefault,p)) = Just (l,s,p)
 applyStyleR _ r = r
+
+
 
 -- | Render some error message. The precedence is set to 11 (i.e. an atomic).
 renError :: Value -> Render
@@ -39,6 +50,8 @@ renError v = Just (v, WSError, 11)
 -- | Create a translation from an error message.
 transError :: Value -> Translation
 transError e = Translation (renError e) []
+
+
 
 -- | Apply a precedence value to a 'Translation'.
 -- If the precedence is higher or equal to that of the current value,
@@ -58,8 +71,8 @@ applyPrecR _ Nothing = Nothing
 -- | Apply a precedence value to a list of subsignal translations.
 -- If the precedence is higher or equal to that of the current value,
 -- it is wrapped in parentheses.
-applyPrecL :: Prec -> [(a, Translation)] -> [(a, Translation)]
-applyPrecL p = L.map (\(a,b) -> (a,applyPrec p b))
+applyPrecs :: Prec -> [(a, Translation)] -> [(a, Translation)]
+applyPrecs p = L.map (second (applyPrec p))
 
 
 -- | Get the value of a 'Translation'. If the value is not defined,
@@ -74,6 +87,31 @@ getVal t = case t of
 filterSignals :: [(SubSignal,Translation)] -> [(SubSignal,Translation)]
 filterSignals = L.filter ((/="") . fst)
 
+
+-- | Change bits using 'BitPart'.
+changeBits :: BitPart -> BitList -> BitList
+changeBits (BPConcat bps) bin = L.foldl (<>) "" $ L.map (`changeBits` bin) bps
+changeBits (BPLit bl)    _bin = bl
+changeBits (BPSlice s)    bin = BL.slice s bin
+
+
+
+
+
+
+-- | Decode a string of bits into an unsigned integer.
+decodeUns :: Integer -> String -> Maybe Integer
+decodeUns k ""      = Just k
+decodeUns k ('0':r) = decodeUns (k*2) r
+decodeUns k ('1':r) = decodeUns (k*2+1) r
+decodeUns _ _       = Nothing
+
+-- | Decode a string of bits into a signed integer.
+decodeSig :: String -> Maybe Integer
+decodeSig ""      = Just 0
+decodeSig ('0':r) = decodeUns 0 r
+decodeSig ('1':r) = decodeUns (-1) r
+decodeSig _       = Nothing
 
 
 -- -- | Like 'translateFromSubs', but includes an error catching mechanism.
@@ -124,7 +162,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
     } -> Translation (Just (v,WSDefault,preco)) $ filterSignals subs
       where
         labels' = L.map Just labels <> L.repeat Nothing
-        subs' = applyPrecL preci subs
+        subs' = applyPrecs preci subs
         vals = L.map (getVal . snd) subs'
         v = start <> joinWith sep fields <> stop
         fields = L.zipWith addLabel labels' vals
@@ -153,34 +191,13 @@ translateFromSubs (Translator _ translator) subs = case translator of
     where t' = translateFromSubs t subs
           Translation ren _ = t'
 
--- | Return the 'Structure' implied by a 'Translator'. Useful for determining
--- the structure of a constant translation.
-structure :: Translator -> Structure
-structure (Translator _ t) = case t of
-  TRef _ s _ -> s
-  TSum ts -> Structure subs
-    where subs = L.concatMap (getS . structure) ts
-          getS (Structure s) = s
-  TAdvancedSum{rangeTrans,defTrans} -> structure $ Translator 0 $ TSum (defTrans : L.map snd rangeTrans)
-  TProduct{subs} -> Structure  $ L.map (second structure) subs
-  TConst _ -> Structure [] -- TODO: derive from value
-  TLut _ s -> s
-  TNumber{} -> Structure []
-  TArray{sub,len} ->
-      Structure . L.map (first show) . enumerate
-    $ L.replicate len $ structure sub
-   where enumerate = L.zip [(0::Int)..]
-  TAdvancedProduct{sliceTrans,hierarchy} -> Structure $ L.map (second (structures L.!!)) hierarchy
-    where structures = L.map (structure . snd) sliceTrans
-  TStyled _ t' -> structure t'
-  TDuplicate n t' -> Structure [(n,structure t')]
-  TChangeBits{sub} -> structure sub
 
 
-translateBinWith :: Translator -> BitList -> Translation
-translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
+-- | Translate a 'BitList' using the provided translator.
+translateBinT :: Translator -> BitList -> Translation
+translateBinT trans@(Translator width variant) bin@(BL _ _ blLength)
   | width <= blLength = case variant of
-    TRef _ _ btf -> btf bin
+    TRef _ TypeRef{translateBinRef} -> translateBinRef bin
     TLut _ _ -> errorX "Can't translate binary data with TLut."
     TNumber{format,spacer} -> Translation (if isJust render then render else Just ("undefined",WSError,11) ) []
       where
@@ -207,11 +224,11 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
         (b,b') = BL.split k bin
         translation = maybe
           (errorT "undefined")
-          (\v -> translateBinWith (subs L.!! fromIntegral v) b') --translate with selected translator
+          (\v -> translateBinT (subs L.!! fromIntegral v) b') --translate with selected translator
           (BL.toInteger b)
-    
+
     TAdvancedSum{index,defTrans,rangeTrans} -> case BL.toInteger $ BL.slice index bin of
-      Just i -> translateBinWith t bin
+      Just i -> translateBinT t bin
         where
           t = fromMaybe defTrans $ asum $ L.map go rangeTrans
           go ((a,b),t') | a<=i && i<b = Just t'
@@ -222,19 +239,19 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
       -> translateFromSubs trans subTs
       where
         subTs = carryFoldl go bin subs
-        go b (lbl,t@(Translator w _)) = let (b',b'') = BL.split w b in (b'',(lbl,translateBinWith t b'))
+        go b (lbl,t@(Translator w _)) = let (b',b'') = BL.split w b in (b'',(lbl,translateBinT t b'))
 
     TConst t -> t
 
     TArray{ sub=sub@(Translator w _), len}
       -> translateFromSubs trans subTs
       where
-        subTs = enumLabel $ L.map (("",) . translateBinWith sub) $ carryFoldl go bin [0..len-1]
+        subTs = enumLabel $ L.map (("",) . translateBinT sub) $ carryFoldl go bin [0..len-1]
         go b _ = let (b',b'') = BL.split w b in (b'',b')
 
     TAdvancedProduct{sliceTrans,hierarchy,valueParts,preco} -> Translation ren subs
       where
-        translations = L.map (\(s,translator) -> translateBinWith translator $ BL.slice s bin) sliceTrans
+        translations = L.map (\(s,translator) -> translateBinT translator $ BL.slice s bin) sliceTrans
         ren = Just (L.concatMap getValPart valueParts, WSDefault, preco)
         subs = L.map (second (translations L.!!)) hierarchy
 
@@ -242,44 +259,146 @@ translateBinWith trans@(Translator width variant) bin@(BL _ _ blLength)
         getValPart (VPRef i p) = getVal $ applyPrec p $ translations L.!! i
 
     -- recursive
-    TStyled sty t -> applyStyle sty $ translateBinWith t bin
+    TStyled sty t -> applyStyle sty $ translateBinT t bin
     TDuplicate n t -> Translation ren' [(n,t')]
-      where t' = translateBinWith t bin
+      where t' = translateBinT t bin
             Translation ren _ = t'
             ren' = (\(v,_,p) -> (v,WSInherit 0,p)) <$> ren
 
-    TChangeBits{sub,bits} -> translateBinWith sub $ changeBits bits bin
+    TChangeBits{sub,bits} -> translateBinT sub $ changeBits bits bin
   | otherwise = errorX $ "BitList length ("<>show blLength<>") is smaller than translator length ("<>show width<>")"
 
 
-changeBits :: BitPart -> BitList -> BitList
-changeBits (BPConcat bps) bin = L.foldl (<>) "" $ L.map (`changeBits` bin) bps
-changeBits (BPLit bl)    _bin = bl
-changeBits (BPSlice s)    bin = BL.slice s bin
+-- structure
+
+-- | Return the 'Structure' implied by a 'Translator'. Useful for determining
+-- the structure of a constant translation.
+structureT :: Translator -> Structure
+structureT (Translator _ t) = case t of
+  TRef _ TypeRef{structureRef} -> structureRef
+  TSum ts -> Structure subs
+    where subs = L.concatMap (getS . structureT) ts
+          getS (Structure s) = s
+  TAdvancedSum{rangeTrans,defTrans} -> structureT $ Translator 0 $ TSum (defTrans : L.map snd rangeTrans)
+  TProduct{subs} -> Structure  $ L.map (second structureT) subs
+  TConst _ -> Structure [] -- TODO: derive from value
+  TLut _ TypeRef{structureRef} -> structureRef
+  TNumber{} -> Structure []
+  TArray{sub,len} ->
+      Structure . L.map (first show) . enumerate
+    $ L.replicate len $ structureT sub
+   where enumerate = L.zip [(0::Int)..]
+  TAdvancedProduct{sliceTrans,hierarchy} -> Structure $ L.map (second (structures L.!!)) hierarchy
+    where structures = L.map (structureT . snd) sliceTrans
+  TStyled _ t' -> structureT t'
+  TDuplicate n t' -> Structure [(n,structureT t')]
+  TChangeBits{sub} -> structureT sub
 
 
-carryFoldl :: (a -> b -> (a,c)) -> a -> [b] -> [c]
-carryFoldl _ _ [] = []
-carryFoldl f i (x:xs) = y:carryFoldl f i' xs
-  where (i',y) = f i x
 
--- applySpacer (0,_) num = num
--- applySpacer (_,"") num = num
--- applySpacer (k,s) num = sign <> joinWith s parts
---   where
---     (sign,digits) = case num of
---       sign@'-':digits -> (sign:"",digits)
---       digits          -> (     "",digits)
---     parts = reverse $ map reverse $ chunksOf k $ L.reverse digits
 
-decodeUns :: Integer -> String -> Maybe Integer
-decodeUns k ""      = Just k
-decodeUns k ('0':r) = decodeUns (k*2) r
-decodeUns k ('1':r) = decodeUns (k*2+1) r
-decodeUns _ _       = Nothing
+-- translator based functions
 
-decodeSig :: String -> Maybe Integer
-decodeSig ""      = Just 0
-decodeSig ('0':r) = decodeUns 0 r
-decodeSig ('1':r) = decodeUns (-1) r
-decodeSig _       = Nothing
+-- | Run a function on a translator's subtranslators, and combine the results. This follows references.
+foldTranslator :: (Translator -> a) -> ([a] -> b) -> Translator -> b
+foldTranslator m f (Translator _ variant) = case variant of
+  -- leaf translators
+  TRef _ TypeRef{translatorRef}     -> f [m translatorRef]
+  TLut _ _                          -> f []
+  TConst _                          -> f []
+  TNumber{}                         -> f []
+
+  -- combining
+  TSum subs                         -> f $ L.map m subs
+  TAdvancedSum{defTrans,rangeTrans} -> f $ L.map (m . snd) rangeTrans <> [m defTrans]
+  TProduct{subs}                    -> f $ L.map (m . snd) subs
+  TArray{sub}                       -> f [m sub]
+  TAdvancedProduct{sliceTrans}      -> f $ L.map (m . snd) sliceTrans
+
+  -- single recursive
+  TStyled _ t                       -> f [m t]
+  TDuplicate _ t                    -> f [m t]
+  TChangeBits{sub}                  -> f [m sub]
+
+-- | Test if there is a LUT translator in a translator (following references).
+hasLutT :: Translator -> Bool
+hasLutT = foldTranslator go or
+  where
+    go (Translator _ (TLut _ _)) = True
+    go t                         = hasLutT t
+
+-- | Add all type references in a translator structure to a type map.
+-- To add the types in a type, run this function on a reference to said type.
+addTypesT :: Translator -> (TypeMap -> TypeMap)
+addTypesT t | Translator _ (TRef n TypeRef{translatorRef}) <- t = addType n translatorRef . addSubTypes
+            | otherwise                                         = addSubTypes
+  where
+    addSubTypes = foldTranslator addTypesT (L.foldl (.) id) t
+
+
+
+
+
+-- lut stuff
+
+-- | From a translator, create a function that given a binary value
+-- returns a list of functions to add all LUT values to the LUT maps.
+addValueT :: Translator -> BitList -> [LUTMap -> LUTMap]
+addValueT translator@(Translator _ variant) = if hasLutT translator then
+  case variant of
+    -- leaf translators
+    TRef _ TypeRef{translatorRef} -> addValueT translatorRef
+    TLut name TypeRef{translateBinRef} -> go
+      where
+        go bin = [M.alter (Just . insertIfMissing bin (translateBinRef bin) . fromMaybe M.empty) name]
+    TConst _ -> const []
+    TNumber{} -> const []
+
+    -- combining
+    TSum subs -> go
+      where
+        fSubs = L.map addValueT subs
+        k = intLog2 $ L.length subs * 2 - 1
+        go bl =
+          let (b',b'') = BL.split k bl
+          in case BL.toInteger b' of
+              Just i -> (fSubs L.!! fromIntegral i) b''
+              Nothing -> []
+
+    TAdvancedSum{index,defTrans,rangeTrans} -> go
+      where
+        fDefTrans = addValueT defTrans
+        fRangeTrans = L.map (second addValueT) rangeTrans
+        go bin = case BL.toInteger $ BL.slice index bin of
+          Just i -> fs bin
+            where
+              fs = fromMaybe fDefTrans $ asum $ L.map go' fRangeTrans
+              go' ((a,b),f) | a<=i && i<b = Just f
+                            | otherwise = Nothing
+          Nothing -> []
+
+    TProduct{subs} -> go'
+      where
+        fSubs = L.map (\(_,trans@(Translator w _)) -> (w,addValueT trans)) subs
+        go' bin = L.concat $ carryFoldl go bin fSubs
+        go b (w,f) = let (b',b'') = BL.split w b in (b'',f b')
+
+    TArray{sub=sub@(Translator w _),len} -> go'
+      where
+        fSub = addValueT sub
+        go' bin = L.concat $ carryFoldl go bin [0..len-1]
+        go b _ = let (b',b'') = BL.split w b in (b'',fSub b')
+
+    TAdvancedProduct{sliceTrans} -> go
+      where
+        fSliceTrans = L.map (second addValueT) sliceTrans
+        go bin = L.concatMap (\(s,f) -> f $ BL.slice s bin) fSliceTrans
+
+    -- single recursive
+    TStyled _ t -> addValueT t
+    TDuplicate _ t -> addValueT t
+    TChangeBits{sub,bits} -> go
+      where
+        fSub = addValueT sub
+        go bin = fSub $ changeBits bits bin
+  else const []

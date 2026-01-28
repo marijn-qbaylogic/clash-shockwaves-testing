@@ -10,7 +10,7 @@ import Data.Typeable
 import qualified Data.List as L
 import Data.Tuple.Extra (uncurry3)
 
-import Clash.Shockwaves.Waveform
+import Clash.Shockwaves.Waveform hiding (tConst)
 import Clash.Shockwaves.LUT
 import Clash.Shockwaves.Trace
 
@@ -67,29 +67,17 @@ instance Waveform ClockWave where
     , vConst clkI
     ]
 
-  addSubtypes = id
-  hasLUT = False
-  addValue _ = id
-
 instance (KnownDomain dom) => Waveform (ResetWave dom) where
   translator = Translator 1 $ TSum $ L.map vConst
     ( case resetPolarity @dom of
         SActiveHigh -> [rstOff,rstOn]
         SActiveLow  -> [rstOff,rstOn] )
 
-  addSubtypes = id
-  hasLUT = False
-  addValue _ = id
-
 instance Waveform EnableWave where
   translator = Translator 1 $ TSum
     [ vConst enOff
     , vConst enOn
     ]
-
-  addSubtypes = id
-  hasLUT = False
-  addValue _ = id
 
 instance KnownDomain dom => WaveformLUT (CREWave dom) where
   translateL = displaySplit displayL splitG
