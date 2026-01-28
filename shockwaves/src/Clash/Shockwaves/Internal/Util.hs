@@ -8,20 +8,21 @@ Some small helper functions.
 
 module Clash.Shockwaves.Internal.Util where
 
-import Clash.Prelude
-import Clash.Shockwaves.Internal.Types
+import           Clash.Prelude
+import           Clash.Shockwaves.Internal.Types
 import qualified Data.List as L
-import Data.Aeson (encodeFile,ToJSON)
-import Data.Char (isAlpha)
-import Data.Proxy
-import Data.Map (Map,member)
+import           Data.List.Split (chunksOf)
 import qualified Data.Map as M
-import Data.Typeable
-import Data.List.Split (chunksOf)
-import Control.Exception (SomeException, evaluate, catch)
-import GHC.IO (unsafeDupablePerformIO)
-import Control.DeepSeq (force, NFData)
-import Control.Exception.Base (Exception(toException))
+import           Data.Map (Map)
+import           Data.Maybe (fromMaybe)
+import           Data.Aeson (encodeFile,ToJSON)
+import           Data.Char (isAlpha)
+import           Data.Proxy
+import           Data.Typeable
+import           Control.Exception (SomeException, evaluate, catch)
+import           GHC.IO (unsafeDupablePerformIO)
+import           Control.DeepSeq (force, NFData)
+import           Control.Exception.Base (Exception(toException))
 
 
 
@@ -44,7 +45,8 @@ safeName n = if isAlpha $ L.head n then n else parenthesize n
 
 -- | Insert value into dictionary if the key was not yet present.
 insertIfMissing :: (Ord k) => k -> v -> Map k v -> Map k v
-insertIfMissing k v m = if member k m then m else M.insert k v m
+-- insertIfMissing k v m = if member k m then m else M.insert k v m
+insertIfMissing k v = M.alter (Just . fromMaybe v) k
 
 -- | Join a list of values with a separator. If the list is empty, an empty
 -- value is returned.
@@ -107,3 +109,12 @@ enumLabel = L.zipWith (\i (_,t) -> (show i,t)) [(0::Integer)..]
 -- | Create error `Translation`
 errorT :: Value -> Translation
 errorT e = Translation (Just (e,WSError,11)) []
+
+
+
+-- | Add a translator by name to the type map.
+addType :: String -> Translator -> (TypeMap -> TypeMap)
+addType = M.insert
+
+
+

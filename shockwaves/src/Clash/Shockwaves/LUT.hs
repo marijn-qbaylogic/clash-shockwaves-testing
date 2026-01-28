@@ -14,6 +14,7 @@ module Clash.Shockwaves.LUT (
   noSplit, splitG,
   precL,
   WaveformForLUT(..),
+  tLut,
 
   Translation(..),
   Value,
@@ -21,7 +22,7 @@ module Clash.Shockwaves.LUT (
   Prec,
   Structure(..),
   SubSignal,
-  structure,
+  structure,structureT,
   tFromVal
 ) where
 

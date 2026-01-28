@@ -105,10 +105,14 @@ newtype Structure
 -- translates, as well as a 'TranslatorVariant' that determines the translation algorithm.
 data Translator = Translator Int TranslatorVariant deriving (Show)
 
-type BinTranslatorFunction = BitList -> Translation
-
-instance Show BinTranslatorFunction where
+instance Show TypeRef where
   show _ = "*"
+
+data TypeRef = TypeRef
+  { structureRef :: Structure
+  , translateBinRef :: BitList -> Translation
+  , translatorRef :: Translator
+  }
 
 
 -- | The translation algorithm used.
@@ -117,15 +121,23 @@ data TranslatorVariant
   -- 'Translator's should still match. The structure is only used so that the
   -- structure can be reconstructed from the translator alone, and is not
   -- actually stored in the final output.
-  = TRef TypeName Structure BinTranslatorFunction
+  = TRef TypeName TypeRef
 
   -- | A reference to a lookup table.
-  | TLut LUTName Structure
+  | TLut LUTName TypeRef
 
+  -- | Select one translator to be used based on the first bits of the binary
+  -- representation. Translate the rest of the bits using the selected translator.
+  -- Keep in mind that problems may occur if subsignal names are shared.
   | TSum [Translator]
-  -- ^ Select one translator to be used based on the first bits of the binary
-  -- representation. Translate using the selected translator. Keep in mind that
-  -- problems may occur if subsignal names are shared.
+
+  -- | Translate the *full* binary data based on what range the index slice is in.
+  -- If it is not in any of the ranges, use default instead.
+  | TAdvancedSum
+    { index :: Slice -- ^ Slice of inputs to use
+    , defTrans :: Translator -- ^ Default translator
+    , rangeTrans :: [(ISlice,Translator)] -- Ranges of indices and their translators.
+    }
 
   -- | Split the binary data into separate fields, translate each of these,
   -- and join together the values.
@@ -145,16 +157,8 @@ data TranslatorVariant
   --   }
   -- @
 
-  -- | Translate the *full* binary data based on what range the index slice is in.
-  -- If it is not in any of the ranges, use default instead.
-  | TAdvancedSum
-    { index :: Slice -- ^ Slice of inputs to use
-    , defTrans :: Translator -- ^ Default translator
-    , rangeTrans :: [(ISlice,Translator)] -- Ranges of indices and their translators.
-    }
-
   | TProduct
-    { subs          :: [(SubSignal, Translator)] -- ^ List of fields to translate.
+    { subs         :: [(SubSignal, Translator)] -- ^ List of fields to translate.
     , start        :: Value -- ^ Text to insert at the start of the value.
     , sep          :: Value -- ^ Text to use to separate values.
     , stop         :: Value -- ^ Text to insert at the end of the value.
@@ -254,7 +258,7 @@ instance ToJSON ValuePart where
 instance ToJSON Translator where
   toJSON (Translator w v) = object ["w" .= w, "v" .= v']
     where v' = case v of
-                TRef n _ _ -> object ["R" .= n]
+                TRef n _ -> object ["R" .= n]
                 TSum subs -> object ["S" .= toJSON subs]
                 TAdvancedSum{index,defTrans,rangeTrans} -> object ["S+" .= object
                   [ "i" .= index
@@ -270,7 +274,7 @@ instance ToJSON Translator where
                     , "p" .= preci
                     , "P" .= preco ]]
                 TConst t -> object ["C" .= toJSON t]
-                TLut lut s -> object ["L" .= [toJSON lut,toJSON s]]
+                TLut lut TypeRef{structureRef} -> object ["L" .= [toJSON lut,toJSON structureRef]]
                 TNumber{format,spacer} -> object ["N" .= object
                   [ "f" .= format
                   , "s" .= spacer]]
