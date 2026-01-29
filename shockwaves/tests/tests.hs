@@ -2,6 +2,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 import Prelude
 
@@ -10,7 +11,7 @@ import Test.Tasty.HUnit
 
 import Clash.Shockwaves.Internal.Types
 import Clash.Shockwaves.Internal.Util
-import Clash.Shockwaves.Internal.Translator
+-- import Clash.Shockwaves.Internal.Translator
 import Clash.Shockwaves.Internal.Waveform
 import Clash.Prelude
 import qualified Data.List as L
@@ -47,7 +48,7 @@ isL x = case x of
   Right () -> assertFailure "passed, but should have failed"
 
 tests :: TestTree
-tests = testGroup "Tests" [testStructureT,structureT,renderT,translationT,lutT]
+tests = testGroup "Tests" [testStructureTest,structureTest,renderTest,translationTest,lutTest]
 
 undef :: a
 undef = Clash.Prelude.undefined
@@ -60,8 +61,8 @@ to test if `testStructure` accurately returns whether
 the translation is a subset of the provided structure.
 
 -}
-testStructureT :: TestTree
-testStructureT = testGroup "TEST testStructure FUNCTION"
+testStructureTest :: TestTree
+testStructureTest = testGroup "TEST testStructure FUNCTION"
   [ testCase "is empty, get empty"  $ isR $ testStructure
     (Structure           [])
     (Translation Nothing [])
@@ -103,7 +104,7 @@ testAll f = L.map go
   where go x = testCase (showX x) (f x)
 
 testS :: Waveform a => a -> Assertion
-testS (x::a) = isR $ testStructure (structure $ translator @a) $ translate x
+testS (x::a) = isR $ testStructure (structure @a) $ translate x
 
 {-
 
@@ -111,8 +112,8 @@ For all listed values, ensure that the translation is a subset of the
 structure of the translator.
 
 -}
-structureT :: TestTree
-structureT = testGroup "TRANSLATION MATCHES TRANSLATOR STRUCTURE"
+structureTest :: TestTree
+structureTest = testGroup "TRANSLATION MATCHES TRANSLATOR STRUCTURE"
   [ testGroup "S"  $ testAll testS [S,undef]
   , testGroup "M"  $ testAll testS [Ma,Mb,Mc,undef]
   , testGroup "F"  $ testAll testS [M True 3,M False 3,undef]
@@ -149,8 +150,8 @@ Tests take the format
 to test if the render value is as expected.
 
 -}
-renderT :: TestTree
-renderT = testGroup "RENDERED STRING IS CORRECT"
+renderTest :: TestTree
+renderTest = testGroup "RENDERED STRING IS CORRECT"
   [ testGroup "S"  $ renders [ S , undef]
                              ["S","S"   ]
   , testGroup "M"  $ renders [ Ma , Mb , Mc , undef     ]
@@ -222,8 +223,8 @@ to test if the translation is as expected.
 `a :@ b` is equivalent to `(a,b)` and only exists to make the pattern more readable.
 
 -}
-translationT :: TestTree
-translationT = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
+translationTest :: TestTree
+translationTest = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
   [ testGroup "S"  $ pats
     [ (S                            , \( T _ []                                                                 )->0)
     , (undef                        , \( T _ []                                                                 )->0) ]
@@ -268,10 +269,18 @@ Test whether the LUT table contains the expected values after
 calling `addValue`
 
 -}
-lutT :: TestTree
-lutT = testGroup "LUT VALUES ARE STORED"
-  [ testCase "True <A> True"        $ addValue (La True True)        M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
-  , testCase "Just (True <A> True)" $ addValue (Just $ La True True) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
-  , testCase "Just (undefined @L)"  $ addValue (Just $ undef @L)     M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L    )])]
-  , testCase "undefined @(Maybe L)" $ addValue (undef @(Maybe L))    M.empty @?= M.empty
+lutTest :: TestTree
+lutTest = testGroup "LUT VALUES ARE STORED"
+  [ testCase "True <A> True"        $ apply (addValue (La True True)       ) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
+  , testCase "Just (True <A> True)" $ apply (addValue (Just $ La True True)) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
+  , testCase "Just (undefined @L)"  $ apply (addValue (Just $ undef @L)    ) M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L    )])]
+  , testCase "undefined @(Maybe L)" $ apply (addValue (undef @(Maybe L))   ) M.empty @?= M.empty
+  -- , testPrint "translator L" (translator @L)
+  -- , testPrint "addValue" $ addValue (La True True)
+  -- , testPrint "hasLut L" $ hasLut @L
   ]
+  where apply fs m = L.foldl (flip ($)) m fs
+        -- testPrint n s = testCaseInfo n (pure $ show s)
+
+-- instance Show (LUTMap -> LUTMap) where
+--   show _ = "*"

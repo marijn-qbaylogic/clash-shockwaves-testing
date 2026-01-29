@@ -198,7 +198,7 @@ translateBinT :: Translator -> BitList -> Translation
 translateBinT trans@(Translator width variant) bin@(BL _ _ blLength)
   | width <= blLength = case variant of
     TRef _ TypeRef{translateBinRef} -> translateBinRef bin
-    TLut _ _ -> errorX "Can't translate binary data with TLut."
+    TLut _ TypeRef{translateBinRef} -> translateBinRef bin
     TNumber{format,spacer} -> Translation (if isJust render then render else Just ("undefined",WSError,11) ) []
       where
         bin' = show bin
@@ -322,10 +322,8 @@ foldTranslator m f (Translator _ variant) = case variant of
 
 -- | Test if there is a LUT translator in a translator (following references).
 hasLutT :: Translator -> Bool
-hasLutT = foldTranslator go or
-  where
-    go (Translator _ (TLut _ _)) = True
-    go t                         = hasLutT t
+hasLutT (Translator _ (TLut _ _)) = True
+hasLutT t = foldTranslator hasLutT or t
 
 -- | Add all type references in a translator structure to a type map.
 -- To add the types in a type, run this function on a reference to said type.
