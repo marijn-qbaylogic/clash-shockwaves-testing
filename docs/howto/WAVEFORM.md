@@ -7,11 +7,7 @@ First, let's go through the functions and see what we need to do:
 
 - `translator` is the most important function, as it produces the data that is used
    to determine how bits in the VCD file get translated. `addTypes` and `addSubtypes`
-   are used to register these values. This will be covered first.
-- `translate` and `translateBin` are for performing translations inside Haskell.
-  These use `pack` and `translator` by default, and don't need to be overwritten.
-- `hasLUT` and `addValue` exist to make LUT-based translations possible and are covered
-in the last section.
+   are used to register these values. This will be covered at length.
 - `width` is the bitwidth as reported by `BitSize` and should not be changed.
 - Similarly, `typeName` does not need to be changed, unless you are writing an
   instance meant to be used as a `derive via`. In that case, use:
@@ -19,9 +15,8 @@ in the last section.
   instance Waveform (WaveformForX a) where
     typeName = typeNameP (Proxy @a)
   ```
-- `styles` and `styles'` are for adding constructor styles, and will likely go
-  unused in a custom instance. `styles` is meant to be overwritten, while `styles'`
-  fills in any missing values and is meant to be left untouched. For a guide on
+- `styles` is for adding constructor styles, and will likely go
+  unused in a fully custom instance. For a guide on
   using styles, look [here](STYLES.md).
 
 
@@ -30,22 +25,7 @@ in the last section.
 
 The most important function of `Waveform` is `translator`: this specifies the `Translator`
 that the waveform viewer should use to unpack and translate the binary values in the VCD
-file. We will discussed it later, but first, let's make sure the translator can be used.
-
-The translator is registered by `addTypes`. By default, this function adds the type
-itself to the type map, and then calls `addSubtypes`, and does not need modification.
-`addSubtypes` then has to register all subtypes in the data type. This is fairly simple.
-For example, given:
-```hs
-data MyType c = P A | Q B c
-```
-the implementation looks like:
-```hs
-addSubtypes = addSubtypes @A . addSubtypes @B . addSubtypes @c
-```
-
-Now we can implement `translator`, which needs to produce a `Translator` value.
-A `Translator` consists of two values: a width, denoting the number of bits the translator
+file. A `Translator` consists of two values: a width, denoting the number of bits the translator
 is expected to receive, and a a `TranslatorVariant` that actually describes how these bits
 are to be interpreted. There are many variants to choose from which are discussed below.
 
@@ -79,10 +59,15 @@ translator = Translator width $ TSum
   ]
 ```
 
-> **Note:** The sum translator will consume $clog(|translators|)$ bits.
+> **Note:** The sum translator will consume $clog(|translators|)$ bits, and pass the rest on to the chosen translator.
 
 > **Note:** The `TDuplicate` translator uses the `WSInherit 0` style to copy the style of it's subvalue.
 > The subvalue does not copy the style directly, as copying a style like `Inherit 2` would be problematic.
+
+If the capabilities of `TSum` are insufficient, you might want to use `TAdvancedSum`. This translator
+allows you to select the bits used to determine the variant, selects the translator based on ranges of values,
+and passes all bits to the selected translator.
+
 
 #### Product types
 Next, if a constructor has fields (a product type), you can use `TProduct`.
@@ -119,7 +104,9 @@ If values never need parentheses, use `preci=-1` and `preco=11`.
 In a case like `fromList [<sub[0]>,<sub[1]>]` you'd want to use `preco=10` (because the value is joined by a space)
 but `preci=-1` (since the list syntax isolates the subvalues, so they never need parentheses).
 
-
+If `TProduct` is not flexible enough, you might want to use `TAdvancedProduct`. This translator
+allows you to translate arbitrary slices of bits with translators, and then construct the value
+and subsignals from these translations.
 
 #### Arrays
 If your datatype looks more like a homogeneous list, you'll likely want to use `TArray`
@@ -163,6 +150,17 @@ Like `tDup`, `tStyled` is the easiest way to change the style of a translator.
 ```hs
 translator' = tStyled "red" translator
 ```
+
+#### Manipulating bits
+
+Sometimes, the binary representation of a type does not allow for the translation you want.
+If this is the case, it's by far the easiest to change to using LUTs. However, if you want
+a more performant option, it might be possible to change the bits using the `TChangeBits`
+translator.
+
+'TChangeBits' has a field `bits` of type `BitPart` which defines what bits get passed on to the
+translator included. 
+
 
 #### Creating custom translator configurations
 Although the translators must still process the bits correctly, a lot of
@@ -209,76 +207,6 @@ In general, the translators `TDuplicate` and `TStyled` can be inserted or remove
 freely, since they do not influence how bits are interpreted, as can all styles and
 precedence and text values.
 
-
-### LUT CREATION
-
-> This section is about the `Waveform` functions needed to deal with types that use lookup tables,
-> not for [translating types using those LUTs](LUTS.md).
-
-`hasLUT` indicates whether there are any data types inside that need to be translated
-and added to a LUT.
-`addValue` is responsible for actually translating and storing these values.
-
-If your data type has no subtypes, or if you already know these do not use LUTs,
-the implementation is simple:
-```hs
-hasLUT = False
-```
-
-If not, add it for all subtypes:
-```hs
-hasLUT = hasLUT @(SubType1) || hasLUT @(SubType2)
-```
-
-If your implementation does not differ too much from the default `Waveform`, you
-can use the `WaveformG` function `hasLutsG` to `or` the `hasLuts` of all subtypes.
-
-Finally, you need to appropriately implement `addValue`. This is a function that,
-given a value of your data type, returns a function that modifies the LUT table with
-all subvalues using LUTs. This means that if your data type has no LUTs, the implementation
-is really simple:
-
-```hs
-addValue _ = id
-```
-
-If there are subvalues, things get harder. In most cases, using `addValueG` is sufficient,
-like using `addValueG` for `addValue`. Most importantly, the function *must*
-be properly defined for `undefined` values. This means you cannot directly evaluate
-based on the constructor! For example:
-
-```hs
-import Clash.Shockwaves.Internal.Util (safeWHNF)
-
-addValue x = case safeWHNF x of
-  Just (Cons1 a b) -> addValue a . addValue b
-  Just (Cons2)     -> id
-  Nothing          -> id
-```
-
-Here, `safeWHNF` is a helper function that will try to evaluate its argument to WHNF.
-If the value is `undefined`, it returns `Nothing` and we simply return `id`.
-
-Keep in mind that when the structure is known even for `undefined` values (as is the case
-when there is only one constructor), the function should simply not evaluate the value
-_at all_ and instead pass on the undefinedness to the subvalues, in the same way
-this is done for `translate'`.
-
-```hs
-addValue x = addValue (getA x) . addValue (getB x)
-  where
-    getA (Cons a _b) = a
-    getB (Cons _a b) = b
--- Note: `addValue (Cons a b) = addValue a . addValue b` fails for `undefined`
-```
-
-To avoid splitting values unnecessarily, if it is unknown whether subvalues use luts,
-`addValue` is usually implemented as:
-```hs
-addValue x = if hasLUT @(MyType a b) then ... else id
-```
-
-If a type does not have LUTs, even the `id` functions are skipped where possible.
 
 
 ### Conclusion

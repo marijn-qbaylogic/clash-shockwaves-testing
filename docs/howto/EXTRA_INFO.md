@@ -44,63 +44,57 @@ We can now modify what our data types look like by changing the `WaveformLUT` im
 ### ADDING A SIGNAL
 
 Let's assume we don't want to change the appearance of the toplevel signal -
-the LUT guide already has enough information on that anyways, and if you change
-`Show` that will already automatically show up. Instead, we are going to add a
-subsignal.
+this is already covered in the [LUT guide](LUTS.md). 
+Instead, we are going to add a subsignal that provides us with extra information.
 
-The `splitL` and `structureL` functions let you overwrite the subsignals that get created.
-`splitL` creates the actual subsignal translations, which must be a subtree of the
-hierarchy provided by `structureL`. We can easily translate the normal fields using
-`translate` and obtain the structure using `structure` and `translator`.
+The `translateL` and `structureL` functions let you overwrite the subsignals that get created.
+We can add a signal manually to our `structureL`, and obtain the subsignal values using a special
+splitter function `splitNorm`.
 
 ```hs
 instance WaveformLUT Coordinate where
-  splitL _ (Coordinate x y) =
-    [ ("x", translate x)
-    , ("y", translate y)
-    , ("norm", Translation (Just (show $ norm (Coordinate x y),WSNormal,11)) [])
-    ]
   structureL = Structure
-    [ ("x", structure $ translator @Int)
-    , ("y", structure $ translator @Int)
-    , ("norm", Structure [])
+    [ ("x", structure @Int)
+    , ("y", structure @Int)
+    , ("norm", structure @Float)
     ]
+  translateL = translateWith renderShow splitNorm
+    where
+      splitNorm _ c@(Coordinate x y) =
+        [ ("x", translate x)
+        , ("y", translate y)
+        , ("norm", translate $ norm c)
+        ]
 ```
 
-> Note: You do not need to make `splitL` robust against `undefined`.
+> Note: `splitNorm` might error if the coordinate is `undefined`, but the `translateWith` function
+> takes care of this.
 
 
 That's it! If we show our data type in Surfer, we see:
 
 ![now with norm](extra/norm.png)
 
-There are a few ways to improve our code. First of all, we can get rid of the ugly
-manual `Translation` using `tFromVal`:
-
-```hs
-splitL _ c@(Coordinate x y) =
-  [ ("x", translate x)
-  , ("y", translate y)
-  , ("norm", tFromVal . show $ norm c)
-  ]
-```
-
-Furthermore, instead of also redefining the signals that are originally present,
-you can use the underlying `Generic`-based functions that are used to create these
+While our data type might be simple enough, adding signals to more complex types
+this way would require us to do a lot of manual definitions. Instead, we'd like to
+use the default functions as much as possible. It's possible
+to use the underlying `Generic`-based functions that are used to create these
 subsignals, and simply add the new signals. These internal functions might change,
 but can be convenient if there are a lot of standard subsignals.
 
 ```hs
-import Clash.Shockwaves.Internal.Waveform (splitG,translatorG)
+import Clash.Shockwaves.Internal.Waveform (translatorG)
 
 instance WaveformLUT Coordinate where
-  splitL r c =
-       splitG r (from c :: Rep Coordinate ())
-    <> [("norm", tFromVal . show $ norm c)]
-
   structureL = Structure (dflt <> extra)
     where
-      Structure dflt = structure $ translatorG @(Rep Coordinate ()) 0 (Data.List.repeat WSNormal)
+      Structure dflt = structureT $ translatorG @(Rep Coordinate ()) 0 (Data.List.repeat WSNormal)
       extra = [("norm", Structure [])]
+
+  translateL = translateWith renderShow splitNorm
+    where
+      splitNorm r c =
+           splitL r c
+        <> [("norm", translate $ norm c)]
 ```
 
