@@ -54,7 +54,7 @@ data L
   deriving Waveform via (WaveformForLUT L)
 
 instance WaveformLUT L where
-  translateL = displaySplit (displayWith labelL styleL precL) splitG
+  translateL = translateWith (renderWith labelL styleL precL) splitL
     where
       labelL (La x y) = show x <> " <A> " <> show y
       labelL (Lb x y) = show x <> " <B> " <> show y

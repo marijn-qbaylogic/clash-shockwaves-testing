@@ -43,13 +43,7 @@ applyStyleR _ r = r
 
 
 
--- | Render some error message. The precedence is set to 11 (i.e. an atomic).
-renError :: Value -> Render
-renError v = Just (v, WSError, 11)
 
--- | Create a translation from an error message.
-transError :: Value -> Translation
-transError e = Translation (renError e) []
 
 
 
@@ -119,8 +113,8 @@ decodeSig _       = Nothing
 -- safeTranslateFromSubs t subs = case safeVal subs of
 --   Right subs' -> case safeVal (translateFromSubs t subs') of
 --     Right t' -> t'
---     Left _e -> Translation (renError "{translation error}") $ filterSignals subs
---   Left _e -> transError "{undefined}"
+--     Left _e -> Translation (errorR "{translation error}") $ filterSignals subs
+--   Left _e -> errorT "{undefined}"
 
 -- | Complete a translation based on already translated subsignals.
 --
@@ -154,7 +148,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
   -- normal
   TSum _ -> case subs of
     [(_,t)] -> t
-    _ -> transError "{invalid variant}"
+    _ -> errorT "{invalid variant}"
   TProduct
     { start, sep, stop
     , labels
@@ -183,7 +177,7 @@ translateFromSubs (Translator _ translator) subs = case translator of
               <> stop
             , WSDefault, preco )
         else
-          renError "{values missing}"
+          errorR "{values missing}"
 
   -- recursive
   TStyled sty t -> applyStyle sty $ translateFromSubs t subs
@@ -233,7 +227,7 @@ translateBinT trans@(Translator width variant) bin@(BL _ _ blLength)
           t = fromMaybe defTrans $ asum $ L.map go rangeTrans
           go ((a,b),t') | a<=i && i<b = Just t'
                       | otherwise = Nothing
-      Nothing -> transError "undefined"
+      Nothing -> errorT "undefined"
 
     TProduct{ subs }
       -> translateFromSubs trans subTs
@@ -348,7 +342,9 @@ addValueT translator@(Translator _ variant) = if hasLutT translator then
     TRef _ TypeRef{translatorRef} -> addValueT translatorRef
     TLut name TypeRef{translateBinRef} -> go
       where
-        go bin = [M.alter (Just . insertIfMissing bin (translateBinRef bin) . fromMaybe M.empty) name]
+        go bin =
+          let translation = safeValOr (errorT "error") (translateBinRef bin)
+          in [M.alter (Just . insertIfMissing bin translation . fromMaybe M.empty) name]
     TConst _ -> const []
     TNumber{} -> const []
 

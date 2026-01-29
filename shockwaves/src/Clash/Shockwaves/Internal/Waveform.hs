@@ -47,7 +47,7 @@ tFromVal v = Translation (rFromVal v) []
 
 -- | Create an error value from an optional error message.
 errMsg :: Maybe Value -> Value
-errMsg = maybe "undefined" (\e -> "{undefinedmsg:"<>e<>"}")
+errMsg = maybe "undefined" (\e -> "{undefined: "<>e<>"}")
 
 
 -- | Wrap a 'Translator' in a 'TStyled' translator using some style, unless the
@@ -89,22 +89,6 @@ tLut _ = Translator (width @a)
       }
 
 
-
-
-
--- -- | Check if a value is safe.
--- -- If not, create an error message and apply the provided function to it.
--- safeValOrMsg :: (NFData a) => (Value -> a) -> a -> a
--- safeValOrMsg f x = case safeVal x of
---   Right x' -> x'
---   Left e -> f $ errMsg e
-
--- | Check if a value is safe.
--- If not, return the default value provided.
-safeValOr :: (NFData a) => a -> a -> a
-safeValOr y x = case safeVal x of
-  Right x' -> x'
-  Left _e -> y
 
 ------------------------------------------ WAVEFORM --------------------------------------
 
@@ -425,36 +409,47 @@ class (Typeable a, BitPack a) => WaveformLUT a where
   default structureL :: (WaveformG (Rep a ())) => Structure
   structureL = structureT $ translatorG @(Rep a ()) 0 (L.repeat WSDefault)
 
+  -- | Translate a value. The translations must adhere to the structure defined in 'structureL'.
+  -- This function must be robust to 'undefined' values!
   translateL :: a -> Translation
   default translateL :: (Generic a, Show a, WaveformG (Rep a ()), PrecG (Rep a ())) => a -> Translation
-  translateL = displaySplit displayShow splitG
+  translateL = translateWith renderShow splitL
 
-displaySplit :: (a -> Render) -> (Render -> a -> [(SubSignal,Translation)]) -> a -> Translation
-displaySplit d s x = Translation ren subs
+-- | Make sure a 'Translation' is fully defined. If not, return `"undefined"`.
+safeTranslation :: Translation -> Translation
+safeTranslation = safeValOr (errorT "undefined")
+
+-- | Given a function that renders a value, and a function that (given this render) prodices the
+-- subsignals, create a translation.
+-- If rendering fails, `"unknown"` is displayed. If creating the subsignals fails, no subsignals are shown.
+translateWith :: (a -> Render) -> (Render -> a -> [(SubSignal,Translation)]) -> a -> Translation
+translateWith d s x = Translation ren subs
   where
-    ren = safeValOr (renError "undefined") $ d x
+    ren = safeValOr (errorR "undefined") $ d x
     subs = safeValOr [] $
             s ren x
 
 -- | Display a value with 'Show', the default wave style, and operator precedence determined using 'Generic'.
-displayShow :: (Show a, Generic a, PrecG (Rep a ())) => a -> Render
-displayShow = displayWith show (const WSDefault) precL
+renderShow :: (Show a, Generic a, PrecG (Rep a ())) => a -> Render
+renderShow = renderWith show (const WSDefault) precL
 
 -- | Display a value with the provided functions for creating the text value, style and operator precedence.
-displayWith :: (a -> Value) -> (a -> WaveStyle) -> (a -> Prec) -> a -> Render
-displayWith v s p x = Just (v x, s x, p x)
+renderWith :: (a -> Value) -> (a -> WaveStyle) -> (a -> Prec) -> a -> Render
+renderWith v s p x = Just (v x, s x, p x)
 
 -- | Display an atomic value (such as a number) using the provided function to obtain the value.BinSpacer
 -- (normal wavestyle, precedence 11).
-displayAtomWith :: (a -> Value) -> a -> Translation
-displayAtomWith f = displaySplit (displayWith f (const WSDefault) (const 11)) noSplit
+translateAtomWith :: (a -> Value) -> a -> Translation
+translateAtomWith f = translateWith (renderWith f (const WSDefault) (const 11)) noSplit
 
--- | Display an atomic value (like a number) with 'Show'. See 'displayAtomWith'.
-displayAtomShow :: (Show a) => a -> Translation
-displayAtomShow = displayAtomWith show
+-- | Display an atomic value (like a number) with 'Show'. See 'translateAtomWith'.
+translateAtomShow :: (Show a) => a -> Translation
+translateAtomShow = translateAtomWith show
 
-displayAtomSigWith :: (Show a) => (a -> Value) -> a -> Translation
-displayAtomSigWith f = displaySplit go noSplit
+-- | Render an atomic value representing a signed number.
+-- If the render value is found to start with `-`, the precedence is set to 0.
+translateAtomSigWith :: (Show a) => (a -> Value) -> a -> Translation
+translateAtomSigWith f = translateWith go noSplit
   where
     go x = Just (v,WSDefault,p)
       where
@@ -463,15 +458,16 @@ displayAtomSigWith f = displaySplit go noSplit
           '-':_ -> 0
           _     -> 11 
 
-
-displayAtomSigShow :: (Show a) => a -> Translation
-displayAtomSigShow = displayAtomSigWith show
+-- | Render an atomic value representing a signed number using 'show'.
+-- See 'translateAtomSigWith'.
+translateAtomSigShow :: (Show a) => a -> Translation
+translateAtomSigShow = translateAtomSigWith show
 
 
 -- | Create subsignals for the constructors and fields.
 -- Constructor translations are a copy of the toplevel render value provided.
-splitG :: (Generic a, WaveformG (Rep a ())) => Render -> a -> [(SubSignal, Translation)]
-splitG r x = translateWithG r (from @_ @() x)
+splitL :: (Generic a, WaveformG (Rep a ())) => Render -> a -> [(SubSignal, Translation)]
+splitL r x = translateWithG r (from @_ @() x)
 
 -- | Create no subsignals for this type.
 noSplit :: Render -> a -> [(SubSignal,Translation)]
@@ -753,22 +749,22 @@ instance (Waveform a, Waveform b) => Waveform (Either a b) where
 
 instance (BitPack Char) => WaveformLUT Char where
   structureL = Structure []
-  translateL = displayAtomShow
+  translateL = translateAtomShow
 deriving via WaveformForLUT Char instance (BitPack Char) => Waveform Char
 
 instance WaveformLUT Bit where
   structureL = Structure []
-  translateL = displayAtomShow
+  translateL = translateAtomShow
 deriving via WaveformForLUT Bit instance Waveform Bit
 
 instance WaveformLUT Double where
   structureL = Structure []
-  translateL = displayAtomSigShow
+  translateL = translateAtomSigShow
 deriving via WaveformForLUT Double instance Waveform Double
 
 instance WaveformLUT Float where
   structureL = Structure []
-  translateL = displayAtomSigShow
+  translateL = translateAtomSigShow
 deriving via WaveformForLUT Float instance Waveform Float
 
 deriving via WaveformForNumber NFSig DecSpacer Int instance Waveform Int
@@ -840,7 +836,7 @@ deriving via WaveformForNumber NFBin BinSpacer (BitVector n)
 instance (BitPack (Fixed r i f), KnownNat i, KnownNat f, Show (Fixed r i f), Typeable r)
   => WaveformLUT (Fixed r i f) where
   structureL = Structure []
-  translateL = displayAtomSigShow
+  translateL = translateAtomSigShow
 deriving via WaveformForLUT (Fixed r i f)
   instance (BitPack (Fixed r i f), KnownNat i, KnownNat f, Show (Fixed r i f), Typeable r)
     => Waveform (Fixed r i f)

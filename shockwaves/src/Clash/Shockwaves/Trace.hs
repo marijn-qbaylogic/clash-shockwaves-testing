@@ -59,6 +59,7 @@ main = do
 
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.Normalise       #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Clash.Shockwaves.Trace
   (
