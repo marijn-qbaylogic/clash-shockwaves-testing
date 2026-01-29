@@ -74,11 +74,18 @@ instance (KnownSymbol s) => QuickSymbol s
 -- If not, optionally return an error message.
 safeVal :: (NFData a) => a -> Either (Maybe Value) a
 safeVal x = unsafeDupablePerformIO $ catch
-  (   evaluate . force . unsafeDupablePerformIO
+  ( evaluate . unsafeDupablePerformIO
     $ catch (evaluate . force $ Right x)
             (\(e::SomeException) ->
               return $ Left (Just $ show $ toException e)))
   (\(XException e) -> return $ Left (Just e))
+
+-- | Check if a value is completely defined.
+-- If not, return the default value provided.
+safeValOr :: (NFData a) => a -> a -> a
+safeValOr y x = case safeVal x of
+  Right x' -> x'
+  Left _e -> y
 
 -- | Evaluate to WHNF. If this fails, return a default value.
 safeWHNF :: a -> Maybe a
@@ -106,10 +113,14 @@ applySpacer (Just (n,s)) v = v'
 enumLabel :: [(SubSignal,a)] -> [(SubSignal,a)]
 enumLabel = L.zipWith (\i (_,t) -> (show i,t)) [(0::Integer)..]
 
--- | Create error `Translation`
-errorT :: Value -> Translation
-errorT e = Translation (Just (e,WSError,11)) []
 
+-- | Render some error message. The precedence is set to 11 (i.e. an atomic).
+errorR :: Value -> Render
+errorR v = Just (v, WSError, 11)
+
+-- | Create a translation from an error message using 'errorR'.
+errorT :: Value -> Translation
+errorT e = Translation (errorR e) []
 
 
 -- | Add a translator by name to the type map.

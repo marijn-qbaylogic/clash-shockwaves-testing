@@ -273,6 +273,7 @@ lutTest :: TestTree
 lutTest = testGroup "LUT VALUES ARE STORED"
   [ testCase "True <A> True"        $ apply (addValue (La True True)       ) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
   , testCase "Just (True <A> True)" $ apply (addValue (Just $ La True True)) M.empty @?= M.fromList [(typeName @L,M.fromList [("011",translate $ La True True)])]
+  , testCase "undefined @L"         $ apply (addValue (undef @L)           ) M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L    )])]
   , testCase "Just (undefined @L)"  $ apply (addValue (Just $ undef @L)    ) M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L    )])]
   , testCase "undefined @(Maybe L)" $ apply (addValue (undef @(Maybe L))   ) M.empty @?= M.empty
   -- , testPrint "translator L" (translator @L)

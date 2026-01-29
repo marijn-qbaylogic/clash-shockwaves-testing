@@ -80,7 +80,7 @@ instance Waveform EnableWave where
     ]
 
 instance KnownDomain dom => WaveformLUT (CREWave dom) where
-  translateL = displaySplit displayL splitG
+  translateL = translateWith displayL splitL
     where 
       displayL (CREWave c r (EnableWave e)) = case (c,isRst r,e) of
         (_              ,True,False) -> rstAndDis
