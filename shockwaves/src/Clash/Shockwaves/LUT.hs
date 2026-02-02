@@ -1,22 +1,31 @@
 {-|
+Module      : Clash.Shockwaves.LUT
+Description : Shockwaves tools for LUTs
 
-Module exporting the tools required for custom 'WaveformLUT' implementations.
+Everything needed to create 'Waveform' instances that use lookup tables.
 
 -}
 
 module Clash.Shockwaves.LUT (
-  Waveform,
+  -- * WaveformLUT
   WaveformLUT(structureL,translateL),
   translateWith,
   renderWith, renderShow,
   translateAtomWith, translateAtomShow,
   translateAtomSigWith, translateAtomSigShow,
-  safeTranslation, safeVal, safeValOr,
   noSplit, splitL,
   precL,
   WaveformForLUT(..),
   tLut,
 
+  -- * Utility
+  tFromVal, rFromVal,
+  safeWHNF, safeVal, safeValOr,
+  safeTranslation,
+  errorT, errorR,
+
+  -- * Standard Shockwaves types and functions
+  Waveform,
   Translation(..),
   Value,
   WaveStyle(..),
@@ -24,7 +33,6 @@ module Clash.Shockwaves.LUT (
   Structure(..),
   SubSignal,
   structure,structureT,
-  tFromVal
 ) where
 
 import Clash.Shockwaves.Internal.Types

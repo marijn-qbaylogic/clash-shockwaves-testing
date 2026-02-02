@@ -1,6 +1,8 @@
 {-|
+Module      : Clash.Shockwaves.Style
+Description : Shockwaves tools for styling signals
 
-Module for more advanced styling.
+Everything needed to add different styles to the waveform viewer.
 
 Waveforms can be styled in a number of ways. Various standard styles are provided
 in 'WaveformStyle'. It is also possible to use custom colors using 'WSColor'.
@@ -19,11 +21,10 @@ import Shockwaves.Style.Colors as C
 
 data Col = Red | Green | Blue deriving ...
 
-instance WaveformLUT Col where
-  styleL = \case
-    Red   -> WSColor (RGB 255 0 0) -- RGB value
-    Green -> wsColor C.lime        -- Colour value
-    Blue  -> "blue"                -- string literal
+instance Waveform Col where
+  styles = [ WSColor (RGB 255 0 0) -- RGB value
+           , wsColor C.lime        -- Colour value
+           , "blue" ]              -- string literal
 @
 
 

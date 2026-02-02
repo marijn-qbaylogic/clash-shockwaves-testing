@@ -1,9 +1,18 @@
+{-|
+Module      : Clash.Shockwaves.BitList
+Description : Dynamically sized binary representations
+
+Various functions for dealing with dynamically sized binary representations of data.
+-}
 
 module Clash.Shockwaves.BitList (
   BitList,
+  -- * Modifying BitLists
   take,drop,split,concat,slice,
-  binPack,binUnpack,
-  toInteger,
+  -- * Using BitList with BitVector
   bvToBl,blToBv,
+  binPack,binUnpack,
+  -- * Using BitList as a number
+  toInteger,
 ) where
 import Clash.Shockwaves.Internal.BitList

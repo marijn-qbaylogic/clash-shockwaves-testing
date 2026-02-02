@@ -7,7 +7,8 @@ import           Clash.Sized.Internal.BitVector
 import           Data.Aeson hiding (Value)
 import           Data.String (IsString (fromString))
 
--- | Like BitVector, but with a dynamic size as to not restrict mixing them for different types
+-- | A type like 'BitVector', but with a dynamic size.
+-- It is meant to make type-independent handling of binary representations possible.
 data BitList = BL
   { unsafeMask      :: !Natural
   , unsafeToNatural :: !Natural
@@ -30,34 +31,40 @@ instance Show BitList where
       showBit 0 1 = '1'
       showBit _ _ = 'x'
 
+-- | Convert a 'BitVector' into a 'BitList'.
 bvToBl :: KnownNat n => BitVector n -> BitList
 bvToBl (BV @n m i) = BL m i (natToNum @n)
 
+-- | Convert a 'BitList' into a 'BitVector', provided that is has the right number
+-- of bits
 blToBv :: forall n. KnownNat n => BitList -> BitVector n
 blToBv (BL m i l) | natToNum @n == l = BV m i
 blToBv _ = errorX "BitList does not match BitVector size" 
 
+-- | Pack a value into a 'BitList'.
 binPack :: (BitPack a) => a -> BitList
 binPack = bvToBl . pack
 
+-- | Unpack a value from a 'BitList'.
 binUnpack :: (BitPack a) => BitList -> a
 binUnpack = unpack . blToBv
 
 
--- | Remove MSBs: `| n | l-n | -> | l-n |`
+-- | Discard the `n` most significant bits.
 drop :: Int -> BitList -> BitList
 drop x = snd . split x
 
--- | Take MSBs: `| n | l-n | -> | n |`
+-- | Take only the `n` most significant bits.
 take :: Int -> BitList -> BitList
-take n (BL m i l) | n > l = error ("Attempt to take "<>show n<>" from BitList of size "<>show l)
+take n (BL m i l) | n > l || n < 0 = error ("Attempt to take "<>show n<>" from BitList of size "<>show l)
                   | otherwise = BL m' i' n
   where
     s = l - n
     m' = shiftR m s
     i' = shiftR i s
 
--- | Split into MSBs and LSBs: `| n | l-n | -> | n |, | l-n |`
+-- | Split a 'BitList' into the `n` most significant bits,
+-- and the rest of the bits
 split :: Int -> BitList -> (BitList,BitList)
 split n bv@(BL mm ii l) = (a,b)
   where
@@ -66,16 +73,18 @@ split n bv@(BL mm ii l) = (a,b)
     i' = shiftL i (l-n)
     b = BL (mm-m') (ii-i') (l-n)
 
+-- | Concatenate two 'BitList's.
 concat :: BitList -> BitList -> BitList
 concat (BL ma ia la) (BL mb ib lb) = BL m i l
   where m = (ma `shiftL` lb) .|. mb
         i = (ia `shiftL` lb) .|. ib
         l = la + lb
 
+-- | Take a range (exclusive) of a 'BitList'.
 slice :: (Int,Int) -> BitList -> BitList
 slice (from,to) = drop from . take to 
 
-
+-- Convert a 'BitList' into an 'Integer' if it has no undefined bits.
 toInteger :: BitList -> Maybe Integer
 toInteger (BL m i _) | m == 0 = Just $ fromIntegral i
 toInteger _ = Nothing
@@ -91,6 +100,9 @@ instance ToJSON BitList where
 
 instance ToJSONKey BitList where
 
+-- | When converting from a string, `0` and `1` are interpreted as bits, and
+-- `_` is treated as a spacer (is ignored). Any other characters are interpreted
+-- as unknown bits.
 instance IsString BitList where
   fromString ss = go ss (BL 0 0 0)
     where

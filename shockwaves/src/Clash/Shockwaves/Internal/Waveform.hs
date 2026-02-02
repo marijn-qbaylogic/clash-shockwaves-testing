@@ -35,7 +35,8 @@ import           Clash.Num.Erroring   (Erroring)
 import           Data.Complex         (Complex)
 import           Data.Ord             (Down)
 import           Data.Functor.Identity(Identity)
-import           Control.DeepSeq      (NFData)
+
+-- making values
 
 -- | Get a 'Render' from a 'Value' using 'WSDefault' and precedence 11.
 rFromVal :: Value -> Render
@@ -49,6 +50,9 @@ tFromVal v = Translation (rFromVal v) []
 errMsg :: Maybe Value -> Value
 errMsg = maybe "undefined" (\e -> "{undefined: "<>e<>"}")
 
+
+
+-- making translators
 
 -- | Wrap a 'Translator' in a 'TStyled' translator using some style, unless the
 -- provided style is 'WSDefault'.
@@ -94,17 +98,17 @@ tLut _ = Translator (width @a)
 
 {-|
 
-Main class for making types displayable in the waveform viewer.
+'Waveform' is the main class for making types displayable in the waveform viewer.
 The class is responsible for defining an appropriate translator and subsignal
 structure, as well as registering types.
 
-To make LUT approaches possible, the class must also be able to translate values,
-and to register individual values. The latter requires the values to be split into
-their subvalues, so that they may be registered in their subsignals.
+To make a LUT approache possible, the class must also be able to translate values,
+and to register individual values.
 
 By default, 'GHC.Generics.Generic' is used to automatically derive this behaviour.
-Extra classes are provided to help implement lookup tables or numerical translators.
-Custom implementations are generally ill-advised, but may be needed for GADTs.
+Extra classes are provided to help implement lookup tables or common types,
+like numerical translators. Custom implementations are also very possible.
+
 
 -}
 
@@ -121,10 +125,10 @@ class (Typeable a, BitPack a) => Waveform a where
 
   -- | List of styles used for constructors.
   --
-  -- Since giving different constructors different colors is a very common usecase
+  -- Since assigning different constructors different colors is a very common usecase
   -- of the waveform style,
   -- this list can be overridden to provides styles for the constructors, in order.
-  -- To no change a style, use 'WSDefault'.
+  -- To not change a style, use 'WSDefault'.
   styles :: [WaveStyle]
   styles = []
 
@@ -132,22 +136,23 @@ class (Typeable a, BitPack a) => Waveform a where
   width :: Int
   width = bitsize (Proxy @a)
 
--- | Function to translate values. By default, this function creates a translation from
+-- | Function to translate values. This function creates a translation from
 -- the binary representation of the data using translateBin, and the translator.
 translate :: forall a. (Waveform a, BitPack a) => a -> Translation
 translate = translateBin @a . BL.binPack
 
 -- | Translate binary data.
--- For LUTs, this involves translating the value back to the original type.
--- For other types, this simply translates the value according to the translator.
+-- Normally, this simply translates the value according to the translator.
+-- For LUTs, this involves translating the value back to the original type and
+-- translating it using a specially defined translation function.
 translateBin :: forall a. Waveform a => BitList -> Translation
 translateBin = translateBinT (translator @a)
 
--- | Register this type and all its subtypes. Do not override.
+-- | Register this type and all its subtypes.
 addTypes :: forall a. Waveform a => TypeMap -> TypeMap
 addTypes = addTypesT $ translator @a
 
--- | Helper function that adds the default style to the 'styles' list.
+-- | Helper function that fills the 'styles' list with 'WSDefault'.
 styles' :: forall a. Waveform a => [WaveStyle]
 styles' = styles @a <> L.repeat WSDefault
 
@@ -155,9 +160,11 @@ styles' = styles @a <> L.repeat WSDefault
 hasLut :: forall a. Waveform a => Bool
 hasLut = hasLutT $ translator @a
 
+-- | Return the structure of a type.
 structure :: forall a. Waveform a => Structure
 structure = structureT $ translator @a
 
+-- | Add all (sub) values that use 'TLut' to their respective LUTs.
 addValue :: forall a. Waveform a => a -> [LUTMap -> LUTMap]
 addValue = addValueT (translator @a) . BL.binPack
 
@@ -166,28 +173,40 @@ addValue = addValueT (translator @a) . BL.binPack
 -- | A class for obtaining the required behaviour of 'Waveform' through "GHC.Generics".
 -- The exact details might change later; use at your own risk.
 class WaveformG a where
-  -- | Given a bitsize and list of styles for the constructors, provide a translator. Defined only for full types and constructors
+  -- | Given a bitsize and list of styles for the constructors, provide a translator.
+  -- 
+  -- Defined only for full types and constructors
   translatorG :: Int -> [WaveStyle] -> Translator
 
-  -- Return a list of translators for constructors as subsignals; defined for constructors, :+: and types with multiple constructors.
+  -- | Return a list of translators for constructors as subsignals.
+  --
+  -- Defined for constructors, @:+:@ and types with multiple constructors.
   constrTranslatorsG :: [WaveStyle] -> [Translator]
-  -- Return a list of translators for fields; defined for fields, :*:, constructors, and types with a single constructor.
-  -- Product types are numbered for types and constructors only.
+
+  -- | Return a list of translators for fields.
+  --
+  -- Defined for fields, @:*:@, constructors, and types with a single constructor.
+  -- Product type subsignals are labeled (numbered) for types and constructors only.
   fieldTranslatorsG :: [(SubSignal,Translator)]
 
   -- | Bitsize of a type. Only used to determine the width of constructors
-  -- (and their fields): constructors, :*:, fields.
+  -- (and their fields).
+  --
+  -- Defined for constructors, @:*:@, and fields.
   widthG :: Int -- for individual constructors
 
-  -- | For LUTs, create translation subsignals from supplied 'Render' value.
-  -- Duplicate the value if there are multiple constructors, and
-  -- just translate the fields. If getting the constructor fails,
-  -- create no subsignals.
-  -- Defined for types, :+: and constructors.
+  -- | For LUTs.
+  -- Create translation subsignals from supplied 'Render' value.
+  -- Duplicate the value if there are multiple constructors, and just translate the fields.
+  -- If getting the constructor fails, create no subsignals.
+  --
+  -- Defined for types, @:+:@ and constructors.
   translateWithG :: Render -> a -> [(SubSignal,Translation)]
 
-  -- | For LUTs. Translate all fields of a (the) constructor. Defined for constructors, :*:, fields
-  -- and types with 1 constructor.
+  -- | For LUTs.
+  -- Translate all fields of a (the) constructor.
+  --
+  -- Defined for constructors, @:*:@, fields and types with 1 constructor.
   translateFieldsG :: a -> [(SubSignal,Translation)]
 
 
@@ -410,17 +429,17 @@ class (Typeable a, BitPack a) => WaveformLUT a where
   structureL = structureT $ translatorG @(Rep a ()) 0 (L.repeat WSDefault)
 
   -- | Translate a value. The translations must adhere to the structure defined in 'structureL'.
-  -- This function must be robust to 'undefined' values!
+  -- This function must be robust to @undefined@ values!
   translateL :: a -> Translation
   default translateL :: (Generic a, Show a, WaveformG (Rep a ()), PrecG (Rep a ())) => a -> Translation
   translateL = translateWith renderShow splitL
 
--- | Make sure a 'Translation' is fully defined. If not, return `"undefined"`.
+-- | Make sure a 'Translation' is fully defined. If not, return a 'Translation' with `"undefined"`.
 safeTranslation :: Translation -> Translation
 safeTranslation = safeValOr (errorT "undefined")
 
--- | Given a function that renders a value, and a function that (given this render) prodices the
--- subsignals, create a translation.
+-- | Given a function that renders a value, and a function that (given this 'Render')
+-- prodices the subsignals, create a translation.
 -- If rendering fails, `"unknown"` is displayed. If creating the subsignals fails, no subsignals are shown.
 translateWith :: (a -> Render) -> (Render -> a -> [(SubSignal,Translation)]) -> a -> Translation
 translateWith d s x = Translation ren subs
@@ -437,7 +456,7 @@ renderShow = renderWith show (const WSDefault) precL
 renderWith :: (a -> Value) -> (a -> WaveStyle) -> (a -> Prec) -> a -> Render
 renderWith v s p x = Just (v x, s x, p x)
 
--- | Display an atomic value (such as a number) using the provided function to obtain the value.BinSpacer
+-- | Display an atomic value (such as a number) using the provided function to obtain the value.
 -- (normal wavestyle, precedence 11).
 translateAtomWith :: (a -> Value) -> a -> Translation
 translateAtomWith f = translateWith (renderWith f (const WSDefault) (const 11)) noSplit
@@ -510,6 +529,7 @@ class (Generic a) => PrecG a where
   precG :: a -> Prec
 
   -- | Return the number of fields of a constructor.
+  -- This is needed to determine whether a constructor is atomic or not.
   nFields :: Integer
   nFields = undefined
 
@@ -575,11 +595,10 @@ instance (KnownNat p) => PrecF (InfixI a p) where
 -- | Helper class for defining a constant translation value. To use this,
 -- derive Waveform via WaveformForConst.
 class (BitPack a, Typeable a) => WaveformConst a where
-  -- | The constant translation value.
+  -- | The constant translation value. Overwrite this if the translation has subsignals.
   constTrans :: Translation
   constTrans = Translation (constRen @a) []
-  -- | Constant render value. Overwrite this if the constant value has no
-  -- subsignals.
+  -- | Constant render value. Overwrite this if the constant value has no subsignals.
   constRen :: Render
   constRen = undefined
   {-# MINIMAL constTrans | constRen #-}
@@ -601,7 +620,7 @@ instance (WaveformConst a, BitPack a, Typeable a)
 -- Options are provided at the type level (signed, format).
 --
 -- @
--- deriving via WaveformForNumber NFSig (Signed 3) instance Waveform (Signed 3)
+-- deriving via WaveformForNumber NFSig ('Just '(3,"_")) instance Waveform (Signed 3)
 -- @
 newtype WaveformForNumber (f::NumberFormat) (s::Maybe NSPair) a
   = WfNum a
@@ -624,11 +643,12 @@ instance (
     $ TNumber{format = formatVal (Proxy @f), spacer = spacerVal (Proxy @s)}
 
 
-type DecSpacer = 'Just '(3,"_")
-type HexSpacer = 'Just '(4,"_")
-type OctSpacer = 'Just '(4,"_")
-type BinSpacer = 'Just '(4,"_")
-type NoSpacer = 'Nothing :: (Maybe NSPair)
+type DecSpacer = 'Just '(3,"_") -- ^ Default spacer for decimal values (`_` every 3 digits)
+type HexSpacer = 'Just '(4,"_") -- ^ Default spacer for hexadecimal values (`_` every 4 digits)
+type OctSpacer = 'Just '(4,"_") -- ^ Default spacer for octal values (`_` every 4 digits)
+type BinSpacer = 'Just '(8,"_") -- ^ Default spacer for binary values (`_` every 8 digits)
+type SpacerEvery n = 'Just '(n,"_") -- ^ Add `_` every /n/ digits.
+type NoSpacer = 'Nothing :: (Maybe NSPair) -- ^ Do not add spacers.
 
 
 -- | Class for turning a type level 'NumberFormat' into a runtime value.
@@ -724,6 +744,7 @@ instance WaveformConst () where
   constRen = rFromVal "()"
 deriving via WaveformForConst () instance Waveform ()
 
+-- | Configure styles through style variables `bool_false` and `bool_true`.
 instance Waveform Bool where
   translator = Translator 1 $ TSum
     [ tConst $ Just ("False","$bool_false",11)
@@ -744,6 +765,7 @@ instance (Waveform a) => Waveform (Maybe a) where
     ]
 
 
+-- | Configure styles through style variables `either_left` and `either_right`.
 instance (Waveform a, Waveform b) => Waveform (Either a b) where
   styles = ["$either_left","$either_right"]
 

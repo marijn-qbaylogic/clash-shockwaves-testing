@@ -23,20 +23,13 @@ import           Numeric (showHex)
 import           Math.NumberTheory.Logarithms (intLog2)
 import           Data.Tuple.Extra (second)
 
--- | A folding function like scan that has separate output and continue values.
-carryFoldl :: (a -> b -> (a,c)) -> a -> [b] -> [c]
-carryFoldl _ _ [] = []
-carryFoldl f i (x:xs) = y:carryFoldl f i' xs
-  where (i',y) = f i x
 
 
-
-
--- | Apply a 'WaveStyle' to a 'Translation' value.
+-- | Apply a 'WaveStyle' to a 'Translation' value. Only replaces 'WSDefault'.
 applyStyle :: WaveStyle -> Translation -> Translation
 applyStyle s (Translation r sb) = Translation (applyStyleR s r) sb
 
--- | Apply a 'WaveStyle' to a 'Render' value.
+-- | Apply a 'WaveStyle' to a 'Render' value. Only replaces 'WSDefault'.
 applyStyleR :: WaveStyle -> Render -> Render
 applyStyleR s (Just (l,WSDefault,p)) = Just (l,s,p)
 applyStyleR _ r = r
@@ -108,14 +101,6 @@ decodeSig ('1':r) = decodeUns (-1) r
 decodeSig _       = Nothing
 
 
--- -- | Like 'translateFromSubs', but includes an error catching mechanism.
--- safeTranslateFromSubs :: Translator -> [(SubSignal,Translation)] -> Translation
--- safeTranslateFromSubs t subs = case safeVal subs of
---   Right subs' -> case safeVal (translateFromSubs t subs') of
---     Right t' -> t'
---     Left _e -> Translation (errorR "{translation error}") $ filterSignals subs
---   Left _e -> errorT "{undefined}"
-
 -- | Complete a translation based on already translated subsignals.
 --
 -- The exact behaviour is non-trivial.
@@ -128,7 +113,7 @@ decodeSig _       = Nothing
 -- the subtranslations. Note for TSum that this is a list containing only the
 -- translation of the variant used, i.e. it behaves like 'TRef', 'TLut' and 'TNumber'.
 --
--- The final two variants, 'TStyle' and 'TDuplicate' are considered *wrappers*
+-- The final two variants, 'TStyle' and 'TDuplicate' are considered /wrappers/
 -- and translate the value recursively.
 translateFromSubs :: Translator -> [(SubSignal,Translation)] -> Translation
 translateFromSubs (Translator _ translator) subs = case translator of
@@ -293,7 +278,8 @@ structureT (Translator _ t) = case t of
 
 -- translator based functions
 
--- | Run a function on a translator's subtranslators, and combine the results. This follows references.
+-- | Run a function on a translator's subtranslators, and combine the results.
+-- This follows 'TRef' references.
 foldTranslator :: (Translator -> a) -> ([a] -> b) -> Translator -> b
 foldTranslator m f (Translator _ variant) = case variant of
   -- leaf translators
