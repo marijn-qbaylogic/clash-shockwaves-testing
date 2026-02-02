@@ -24,29 +24,43 @@ import           GHC.IO (unsafeDupablePerformIO)
 import           Control.DeepSeq (force, NFData)
 import           Control.Exception.Base (Exception(toException))
 
+-- | A folding function like scan that has separate output and continue values.
+-- The dataflow looks like:
+-- >    [ b,    b',   b'' ]
+-- >      v     v     v
+-- > a > [f] > [f] > [f] > _
+-- >      v     v     v
+-- >    [ c,    c',   c'' ]  
+carryFoldl :: (a -> b -> (a,c)) -> a -> [b] -> [c]
+carryFoldl _ _ [] = []
+carryFoldl f i (x:xs) = y:carryFoldl f i' xs
+  where (i',y) = f i x
+
+-- | Insert value into dictionary if the key was not yet present.
+insertIfMissing :: (Ord k) => k -> v -> Map k v -> Map k v
+-- insertIfMissing k v m = if member k m then m else M.insert k v m
+insertIfMissing k v = M.alter (Just . fromMaybe v) k
 
 
--- | Wrap parentheses around a value.
-parenthesize :: Value -> Value
-parenthesize n = "("<>n<>")"
+-- | Re-export of 'Data.Aeson.encodeFile' for cleaner naming in tracing functions.
+writeFileJSON :: forall a. ToJSON a => FilePath -> a -> IO ()
+writeFileJSON = encodeFile
 
 
 -- | Returns the 'BitSize' of a type as a runtime 'Int'.
 bitsize :: (BitPack a) => Proxy a -> Int
 bitsize (_ :: Proxy a) = fromInteger $ natVal $ Proxy @(BitSize a)
 
--- | Re-export of 'Data.Aeson.encodeFile' for cleaner naming in tracing functions.
-writeFileJSON :: forall a. ToJSON a => FilePath -> a -> IO ()
-writeFileJSON = encodeFile
+
+
+
+-- | Wrap parentheses around a value.
+parenthesize :: Value -> Value
+parenthesize n = "("<>n<>")"
 
 -- | Add parentheses around an identifier if it is an operator.
 safeName :: Value -> Value
 safeName n = if isAlpha $ L.head n then n else parenthesize n
-
--- | Insert value into dictionary if the key was not yet present.
-insertIfMissing :: (Ord k) => k -> v -> Map k v -> Map k v
--- insertIfMissing k v m = if member k m then m else M.insert k v m
-insertIfMissing k v = M.alter (Just . fromMaybe v) k
 
 -- | Join a list of values with a separator. If the list is empty, an empty
 -- value is returned.
@@ -54,6 +68,10 @@ joinWith :: Value -> [Value] -> Value
 joinWith s (x:y:r) = x <> s <> joinWith s (y:r)
 joinWith _ [x] = x
 joinWith _ [] = ""
+
+
+
+
 
 -- | Obtain the name of a type from a proxy value.
 -- The name consists of a unique fingerprint (which is safe to use)
@@ -63,14 +81,16 @@ typeNameP :: Typeable a => Proxy a -> TypeName
 typeNameP p = show (typeRepFingerprint r) <> ":" <> show r
   where r = typeRep p
 
--- | Class for improving runtime symbol syntax readability.
-class (KnownSymbol s) => QuickSymbol s where
-  -- | Shorter way of obtaining the runtime value of a type level string.
-  sym :: String
-  sym = symbolVal (Proxy @s)
-instance (KnownSymbol s) => QuickSymbol s
 
--- | Check if a value is safe to use.
+
+-- | Shorthand function for obtaining the runtime 'String' of a type level Symbol.
+sym :: forall s. KnownSymbol s => String
+sym = symbolVal (Proxy @s)
+
+
+
+
+-- | Check if a value is completely defined.
 -- If not, optionally return an error message.
 safeVal :: (NFData a) => a -> Either (Maybe Value) a
 safeVal x = unsafeDupablePerformIO $ catch
@@ -96,7 +116,11 @@ safeWHNF x = unsafeDupablePerformIO $ catch
               return Nothing))
   (\(XException _e) -> return Nothing)
 
--- | Insert spacers in a values
+
+
+
+
+-- | Insert spacers in a number value
 applySpacer :: NumberSpacer -> Value -> Value
 applySpacer Nothing v = v
 applySpacer (Just (0,_)) v = v
@@ -109,9 +133,11 @@ applySpacer (Just (n,s)) v = v'
         joinWith (L.reverse s) chunks)
 
 
--- | Replace empty labels with numbers
+-- | Replace subsignal labels with numbers
 enumLabel :: [(SubSignal,a)] -> [(SubSignal,a)]
 enumLabel = L.zipWith (\i (_,t) -> (show i,t)) [(0::Integer)..]
+
+
 
 
 -- | Render some error message. The precedence is set to 11 (i.e. an atomic).
@@ -121,6 +147,8 @@ errorR v = Just (v, WSError, 11)
 -- | Create a translation from an error message using 'errorR'.
 errorT :: Value -> Translation
 errorT e = Translation (errorR e) []
+
+
 
 
 -- | Add a translator by name to the type map.

@@ -54,8 +54,8 @@ type LUTMap = Map LUTName LUT
 -- | A lookup table of 'Translation's.
 type LUT = Map BitList Translation
 
+-- | The color type used in 'WaveStyle'.
 type Color = RGB Word8
--- ^ The color type used in 'WaveStyle'.
 
 -- | Translation of a value.
 -- The translation consists of a 'Render' value (the representation of the value itself)
@@ -66,12 +66,14 @@ data Translation
 
 -- | The style in which a signal should be displayed.
 data WaveStyle
-  = WSDefault -- ^ The default waveform style. This is the only style overwritten by TStyled.
+  = WSDefault
+    -- ^ The default waveform style. It is rendered as 'WSNormal'.
+    -- This is the only style overwritten by 'TStyled'.
   | WSError -- ^ An error value. Errors are propagated by translators.
   | WSHidden -- ^ Do not display any value, even if it exists.
   | WSInherit Natural -- ^ Copy the style of the nth subsignal.
 
-  | WSNormal -- ^ Surfer's default signal style.
+  | WSNormal -- ^ A normal value.
   | WSWarn -- ^ A warning value.
   | WSUndef -- ^ An undefined value.
   | WSHighImp -- ^ A high impedance value.
@@ -89,11 +91,12 @@ instance NFData WaveStyle where
 data NumberFormat
   = NFSig -- ^ A signed decimal value.
   | NFUns -- ^ An unsigned decimal value.
-  | NFHex -- ^ A hexadecimal value. TODO: Supports partially undefined values.
-  | NFOct -- ^ An octal value. TODO: Supports partially undefined values.
-  | NFBin -- ^ A binary value.
+  | NFHex -- ^ A hexadecimal value. Supports partially undefined values.
+  | NFOct -- ^ An octal value. Supports partially undefined values.
+  | NFBin -- ^ A binary value. Supports partially undefined values.
   deriving (Show, Typeable, Generic, NFData)
 
+-- | A type for defining spacers and the way they are placed.
 type NumberSpacer = Maybe (Integer,String)
 
 -- | A structure value that shows what subsignals are present.
@@ -108,39 +111,60 @@ data Translator = Translator Int TranslatorVariant deriving (Show)
 instance Show TypeRef where
   show _ = "*"
 
+-- | A type-agnostic reference to various waveform details of a type.
 data TypeRef = TypeRef
-  { structureRef :: Structure
+  { structureRef :: Structure -- ^ The structure of the translator.
   , translateBinRef :: BitList -> Translation
-  , translatorRef :: Translator
+    -- ^ A function to translate binary data. Normally, this would be
+    -- @translateBinT translatorRef@, but for 'TLut', the `translateL` function
+    -- in `WaveformLUT`.
+  , translatorRef :: Translator -- ^ The translator used for the type.
   }
 
 
 -- | The translation algorithm used.
+-- Translator variants determine how the bits are interpreted, split, manipulated,
+-- and in the end, translatated and displayed in the waveform viewer.
 data TranslatorVariant
   -- | Use the translator of a different type. Note that the width value of the
-  -- 'Translator's should still match. The structure is only used so that the
-  -- structure can be reconstructed from the translator alone, and is not
-  -- actually stored in the final output.
+  -- 'Translator's should match that of the target. The 'TypeRef' parameter does not
+  -- end up in the actual output, but is used to access functionality for the referenced
+  -- type. Use 'tRef' to create this translator.
   = TRef TypeName TypeRef
 
-  -- | A reference to a lookup table.
+  -- | A reference to a lookup table. Implement 'Waveform' through 'WaveformLUT'
+  -- to stably use this functionality.
   | TLut LUTName TypeRef
 
   -- | Select one translator to be used based on the first bits of the binary
   -- representation. Translate the rest of the bits using the selected translator.
-  -- Keep in mind that problems may occur if subsignal names are shared.
+  -- To be exact, if /k/ translators are provided, /ceil(log2(k))/ bits will be
+  -- consumed to select the translator.
+  --
+  -- No subsignals for the translators are created. Keep in mind that problems may
+  -- occur if two translators specify subsignals with identical names.
   | TSum [Translator]
 
-  -- | Translate the *full* binary data based on what range the index slice is in.
-  -- If it is not in any of the ranges, use default instead.
+  -- | Use @index@ to take a slice of the binary data. This slice is interpreted
+  -- as an unsigned integer. This index value is checked against the ranges in
+  -- @rangeTrans@; the first translator with a value in the range is used.
+  -- If no ranges match, the @defTrans@ is used.
+  --
+  -- The selected translator is passed the full binary.
   | TAdvancedSum
     { index :: Slice -- ^ Slice of inputs to use
     , defTrans :: Translator -- ^ Default translator
-    , rangeTrans :: [(ISlice,Translator)] -- Ranges of indices and their translators.
+    , rangeTrans :: [(ISlice,Translator)] -- ^ Ranges of indices (half-open) and their translators.
     }
 
   -- | Split the binary data into separate fields, translate each of these,
   -- and join together the values.
+  -- Specifically, for each of the listed translators, consume as many bits as specified
+  -- by the translator, then pass on the rest of the bits to the other translators.
+  --
+  -- The value is constructed from the values of the subtranslators.
+  -- A start, stop and separator string can be specified, as well as optional
+  -- labels to put in front of the different values.
   --
   -- Example:
   --
@@ -156,7 +180,6 @@ data TranslatorVariant
   --   , preco = 11
   --   }
   -- @
-
   | TProduct
     { subs         :: [(SubSignal, Translator)] -- ^ List of fields to translate.
     , start        :: Value -- ^ Text to insert at the start of the value.
@@ -171,7 +194,8 @@ data TranslatorVariant
     }
 
   -- | An array value. This behaves much like 'TProduct', except that no labels
-  -- are provided, and all fields use the same translator.
+  -- can be provided, and all fields use the same translator. The fields are numbered
+  -- starting from 0.
   | TArray
     { sub    :: Translator -- ^ Translator used for all values.
     , len    :: Int -- ^ Length of the array.
@@ -182,29 +206,40 @@ data TranslatorVariant
     , preco  :: Prec -- ^ Outer precedence: used for the combined value.
     }
 
-  -- | Advance product type
+  -- | Advance product type.
+  -- First, a number of slices of the binary are translated.
+  -- Then, the subsignals are picked from these translations,
+  -- and the value is constructed from fixed strings and values from the translators.
   | TAdvancedProduct
     { sliceTrans :: [(Slice,Translator)]
+      -- ^ A list of slices of the input, and translators to translate them with.
     , hierarchy :: [(SubSignal,Int)]
+      -- ^ A list of subsignals, and what index of @sliceTrans@ to use for their values.
     , valueParts :: [ValuePart]
+      -- ^ A list of value literals and references to the values in @sliceTrans@.
     , preco :: Prec
+      -- ^ The precedence of the final value.
     }
 
-  -- | Translate a value only if the first bit of the binary representation is
-  -- @1@. If it is @0@, display nothing.
+  -- | Translate the binary data using the translator specified, and duplicate
+  -- the value into a subsignal of the provided name. This duplication applies
+  -- the @WSInherit 0@ style to copy the actual style of the subvalue.
   | TDuplicate SubSignal Translator
 
-  -- | Apply a style to a translation.
-  -- Does not change the structure.
+  -- | Apply a style to a translation, replacing only 'WSDefault'.
+  -- This translator is purely cosmetic and otherwise does not influence translation.
   | TStyled WaveStyle Translator
 
   -- | Modify the binary input of the contained translator
+  -- The binary data is modified using @bits@ (see 'BitPart') before being passed
+  -- onto the subtranslator.
   | TChangeBits
     { sub  :: Translator
     , bits :: BitPart
     }
 
-  -- | A numerical value.
+  -- | Translate the binary data as an integer. @format@ and @spacer@ determine
+  -- how exactly the value is displayed.
   | TNumber
     { format :: NumberFormat
       -- ^ Format used to display data.
@@ -212,18 +247,19 @@ data TranslatorVariant
       -- ^ Optional spacer to improve readability
     }
 
-  -- | A constant translation value. The binary value
-  -- provided is completely ignored, even if not properly defined.
+  -- | A constant translation value. The binary value provided is completely ignored.
   | TConst Translation
 
   deriving (Show)
 
 -- | Parts of the binary output of 'TChangeBits'.
+-- Each constructor modifies bits in a certain way.
+--
+-- More may be added later.
 data BitPart
-  = BPConcat [BitPart] -- ^ Concatenate sets of bits
-  | BPLit BitList -- ^ Literal bits
-  | BPSlice Slice -- ^ Slice of input
-  -- more to be added later
+  = BPConcat [BitPart] -- ^ Pass the binary data onto multiple 'BitPart's, and concatenate their results.
+  | BPLit BitList -- ^ Return the 'BitList', ignoring the input.
+  | BPSlice Slice -- ^ Return a slice of the input.
   deriving (Show)
 
 -- | Parts of the value of 'TAdvancedProduct'.
@@ -235,13 +271,16 @@ data ValuePart
 type Slice = (Int, Int)
 type ISlice = (Integer,Integer)
 
+-- | A 'WaveStyle' may be constructed from a value in various ways.
+-- Values starting with `$` are treated as 'WSVar' with 'WSDefault' as fallback
+-- value. Hexadecimals and color names are used to create 'WSColor' (see 'readColourName').
 instance IsString WaveStyle where
   fromString ('#':hex) = WSColor $ go $ L.map (fromIntegral . digitToInt) hex
     where go :: [Word8] -> Color
           go [r,r',g,g',b,b'] = RGB (16*r+r') (16*g+g') (16*b+b')
           go [r,g,b] = RGB (17*r) (17*g) (17*b)
           go _ = error ("bad hex code #"<>hex)
-  fromString ('$':var) = WSVar var WSNormal
+  fromString ('$':var) = WSVar var WSDefault
   fromString s =
       WSColor . toSRGB24 . fromJust
     $ (readColourName s :: (Maybe (Colour Double)))
