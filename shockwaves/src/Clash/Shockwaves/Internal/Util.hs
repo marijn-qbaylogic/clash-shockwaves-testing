@@ -1,9 +1,14 @@
+{-|
+Copyright  :  (C) 2025-2026, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
+Some small helper functions.
+-}
+
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-|
-Some small helper functions.
--}
 
 
 module Clash.Shockwaves.Internal.Util where

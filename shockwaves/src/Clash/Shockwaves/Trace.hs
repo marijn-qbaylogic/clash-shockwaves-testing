@@ -1,9 +1,7 @@
--- adapted from commit e702e9a
-
 {-|
 Copyright  :  (C) 2018, Google Inc.
                   2019, Myrtle Software Ltd
-                  2022-2024, QBayLogic B.V.
+                  2022-2026, QBayLogic B.V.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 
@@ -50,6 +48,8 @@ main = do
       writeFileJSON "mainCounter.json" meta
 @
 -}
+
+-- adapted from Clash.Signal.Trace
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -626,8 +626,6 @@ waitForTraces#
 waitForTraces# maps signal traceNames = do
   written <- atomicWriteIORef maps (Map.empty,Map.empty,Map.empty)
   rest <- foldM go (written `pseq` signal) traceNames
-  -- atomicWriteIORef maps (Map.empty,Map.empty,Map.empty)
-  -- rest <- foldM go signal traceNames
   seq rest (return ())
  where
   go (s0 :- ss) nm = do
@@ -638,15 +636,3 @@ waitForTraces# maps signal traceNames = do
       deepseqX
         s0
         (go ss nm)
--- -- old version using lists (but it does work!)
---   rest <- foldM go (sample signal) traceNames 
---   return $ deepseqX (head rest) ()
---  where
---   go s nm = do
---     (_,_,m) <- readIORef maps
---     if Map.member nm m then
---       return s
---     else
---       deepseqX
---         (head s)
---         (go (tail s) nm)

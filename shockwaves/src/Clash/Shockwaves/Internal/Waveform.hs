@@ -1,3 +1,12 @@
+{-|
+Copyright  :  (C) 2025-2026, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
+The 'Waveform' class, functions derived from it, special 'Waveform' variants such as
+'WaveformLUT', and 'Waveform' instances for default types.
+-}
+
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}

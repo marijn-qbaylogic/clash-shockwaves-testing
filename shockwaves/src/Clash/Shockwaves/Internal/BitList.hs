@@ -1,3 +1,9 @@
+{-|
+Copyright  :  (C) 2025-2026, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+-}
+
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Clash.Shockwaves.Internal.BitList where
