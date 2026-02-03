@@ -1,4 +1,7 @@
 {-|
+Copyright  :  (C) 2025-2026, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 Module      : Clash.Shockwaves.Trace.CRE
 Description : Trace clock, reset and enable signals
 
