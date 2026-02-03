@@ -154,6 +154,7 @@ traceEnable lbl en = traceSignal lbl (EnableWave <$> fromEnable en)
 -- | Create a signal displaying the clock, reset and enable signals.
 -- 
 -- Example:
+--
 -- > traceClockResetEnable "cre" myDesign clockGen resetGen enableGen
 --
 -- The tyle of a combined disable and reset can be configured through style variable 

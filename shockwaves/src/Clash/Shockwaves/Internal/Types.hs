@@ -73,7 +73,7 @@ data WaveStyle
     -- This is the only style overwritten by 'TStyled'.
   | WSError -- ^ An error value. Errors are propagated by translators.
   | WSHidden -- ^ Do not display any value, even if it exists.
-  | WSInherit Natural -- ^ Copy the style of the nth subsignal.
+  | WSInherit Natural -- ^ Copy the style of the /n/th subsignal.
 
   | WSNormal -- ^ A normal value.
   | WSWarn -- ^ A warning value.
@@ -118,8 +118,8 @@ data TypeRef = TypeRef
   { structureRef :: Structure -- ^ The structure of the translator.
   , translateBinRef :: BitList -> Translation
     -- ^ A function to translate binary data. Normally, this would be
-    -- @translateBinT translatorRef@, but for 'TLut', the `translateL` function
-    -- in `WaveformLUT`.
+    -- @translateBinT translatorRef@, but for 'TLut', the @translateL@ function
+    -- in 'WaveformLUT'.
   , translatorRef :: Translator -- ^ The translator used for the type.
   }
 
@@ -131,10 +131,10 @@ data TranslatorVariant
   -- | Use the translator of a different type. Note that the width value of the
   -- 'Translator's should match that of the target. The 'TypeRef' parameter does not
   -- end up in the actual output, but is used to access functionality for the referenced
-  -- type. Use 'tRef' to create this translator.
+  -- type. Use @tRef@ to create this translator.
   = TRef TypeName TypeRef
 
-  -- | A reference to a lookup table. Implement 'Waveform' through 'WaveformLUT'
+  -- | A reference to a lookup table. Implement @Waveform@ through @WaveformLUT@
   -- to stably use this functionality.
   | TLut LUTName TypeRef
 
@@ -156,7 +156,7 @@ data TranslatorVariant
   | TAdvancedSum
     { index :: Slice -- ^ Slice of inputs to use
     , defTrans :: Translator -- ^ Default translator
-    , rangeTrans :: [(ISlice,Translator)] -- ^ Ranges of indices (half-open) and their translators.
+    , rangeTrans :: [(ISlice,Translator)] -- ^ Ranges of indices (half-open) and their translators
     }
 
   -- | Split the binary data into separate fields, translate each of these,
@@ -190,7 +190,7 @@ data TranslatorVariant
     , labels       :: [Value]
     -- ^ List of labels to insert before each value.
     -- If empty, insert no labels.
-    -- Else, the length must match that of @subs@, and provided values are inserted.
+    -- Else, the length must match that of @subs@.
     , preci        :: Prec -- ^ Inner precedence: used on subvalues.
     , preco        :: Prec -- ^ Outer precedence: used for the combined value.
     }
@@ -274,7 +274,7 @@ type Slice = (Int, Int)
 type ISlice = (Integer,Integer)
 
 -- | A 'WaveStyle' may be constructed from a value in various ways.
--- Values starting with `$` are treated as 'WSVar' with 'WSDefault' as fallback
+-- Values starting with @$@ are treated as 'WSVar' with 'WSDefault' as fallback
 -- value. Hexadecimals and color names are used to create 'WSColor' (see 'readColourName').
 instance IsString WaveStyle where
   fromString ('#':hex) = WSColor $ go $ L.map (fromIntegral . digitToInt) hex

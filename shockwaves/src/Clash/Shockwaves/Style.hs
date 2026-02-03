@@ -16,25 +16,32 @@ These values can be provided in 3 typical ways:
 - From a @Colour Double@ value, using the function 'wsColor'.
   Many such values are provided in "Clash.Shockwaves.Style.Colors".
 - Using a string literal: if @OverloadedStrings@ is enabled, the 'WaveStyle'
-  value can be represented using a lowercase string literal.
+  value can be represented using a color name or hex color string literal.
   See 'Data.Colour.Names.readColourName'.
 
+Finally, 'WSVar' makes it possible to define style variables in config files.
+This can also be achieved by using a string literal starting with @$@.
+
+Some examples:
+
 @
+import Shockwaves.Style
 import Shockwaves.Style.Colors as C
 
-data Col = Red | Green | Blue deriving ...
+data Col = Red | Green | Blue | Yellow | Cyan deriving ...
 
 instance Waveform Col where
   styles = [ WSColor (RGB 255 0 0) -- RGB value
            , wsColor C.lime        -- Colour value
-           , "blue" ]              -- string literal
+           , "blue"                -- color name
+           , "#ffff00"             -- hexadecimal color
+           , "$cyan"               -- style variable
 @
 
 
 -}
 
 module Clash.Shockwaves.Style (
-  module Colors,
   WaveStyle(..),
   Color,
   RGB(..),
@@ -43,7 +50,6 @@ module Clash.Shockwaves.Style (
 ) where
 import Clash.Prelude
 import Clash.Shockwaves.Internal.Types (WaveStyle(..),Color)
-import Clash.Shockwaves.Style.Colors as Colors
 import Data.Colour.SRGB (RGB(..), toSRGB24)
 import Data.Word (Word8)
 import Data.Colour (Colour)

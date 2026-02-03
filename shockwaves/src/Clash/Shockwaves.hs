@@ -6,10 +6,10 @@ Module      : Clash.Shockwaves
 Description : Shockwaves: Typed waveforms
 
 Shockwaves is a system for typed waveforms in Clash.
-'Clash.Shockwaves' exports the minimum requirements for using Shockwaves.
+"Clash.Shockwaves" exports the minimum requirements for using Shockwaves.
 
-For more options, see 'Clash.Shockwaves.Waveform', 'Clash.Shockwaves.Style',
-'Clash.Shockwaves.LUT' and 'Clash.Shockwaves.Trace'.
+For more options, see "Clash.Shockwaves.Waveform", "Clash.Shockwaves.Style",
+"Clash.Shockwaves.LUT" and "Clash.Shockwaves.Trace".
 
 Note: this exports the "Clash.Shockwaves.Trace" module, which creates name space
 collisions with "Clash.Signal.Trace". Import qualified or selectively.

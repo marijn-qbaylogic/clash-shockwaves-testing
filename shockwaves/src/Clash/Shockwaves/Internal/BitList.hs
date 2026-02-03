@@ -56,11 +56,11 @@ binUnpack :: (BitPack a) => BitList -> a
 binUnpack = unpack . blToBv
 
 
--- | Discard the `n` most significant bits.
+-- | Discard the /n/ most significant bits.
 drop :: Int -> BitList -> BitList
 drop x = snd . split x
 
--- | Take only the `n` most significant bits.
+-- | Take only the /n/ most significant bits.
 take :: Int -> BitList -> BitList
 take n (BL m i l) | n > l || n < 0 = error ("Attempt to take "<>show n<>" from BitList of size "<>show l)
                   | otherwise = BL m' i' n
@@ -69,7 +69,7 @@ take n (BL m i l) | n > l || n < 0 = error ("Attempt to take "<>show n<>" from B
     m' = shiftR m s
     i' = shiftR i s
 
--- | Split a 'BitList' into the `n` most significant bits,
+-- | Split a 'BitList' into the /n/ most significant bits,
 -- and the rest of the bits
 split :: Int -> BitList -> (BitList,BitList)
 split n bv@(BL mm ii l) = (a,b)

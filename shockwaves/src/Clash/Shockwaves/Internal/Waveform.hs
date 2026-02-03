@@ -443,13 +443,13 @@ class (Typeable a, BitPack a) => WaveformLUT a where
   default translateL :: (Generic a, Show a, WaveformG (Rep a ()), PrecG (Rep a ())) => a -> Translation
   translateL = translateWith renderShow splitL
 
--- | Make sure a 'Translation' is fully defined. If not, return a 'Translation' with `"undefined"`.
+-- | Make sure a 'Translation' is fully defined. If not, return a 'Translation' with @"undefined"@.
 safeTranslation :: Translation -> Translation
 safeTranslation = safeValOr (errorT "undefined")
 
 -- | Given a function that renders a value, and a function that (given this 'Render')
 -- prodices the subsignals, create a translation.
--- If rendering fails, `"unknown"` is displayed. If creating the subsignals fails, no subsignals are shown.
+-- If rendering fails, @"unknown"@ is displayed. If creating the subsignals fails, no subsignals are shown.
 translateWith :: (a -> Render) -> (Render -> a -> [(SubSignal,Translation)]) -> a -> Translation
 translateWith d s x = Translation ren subs
   where
@@ -475,7 +475,7 @@ translateAtomShow :: (Show a) => a -> Translation
 translateAtomShow = translateAtomWith show
 
 -- | Render an atomic value representing a signed number.
--- If the render value is found to start with `-`, the precedence is set to 0.
+-- If the render value is found to start with @-@, the precedence is set to 0.
 translateAtomSigWith :: (Show a) => (a -> Value) -> a -> Translation
 translateAtomSigWith f = translateWith go noSplit
   where
@@ -628,6 +628,7 @@ instance (WaveformConst a, BitPack a, Typeable a)
 -- | Helper class for deriving 'Waveform' for numerical types.
 -- Options are provided at the type level (signed, format).
 --
+-- Example:
 -- @
 -- deriving via WaveformForNumber NFSig ('Just '(3,"_")) instance Waveform (Signed 3)
 -- @
@@ -652,11 +653,11 @@ instance (
     $ TNumber{format = formatVal (Proxy @f), spacer = spacerVal (Proxy @s)}
 
 
-type DecSpacer = 'Just '(3,"_") -- ^ Default spacer for decimal values (`_` every 3 digits)
-type HexSpacer = 'Just '(4,"_") -- ^ Default spacer for hexadecimal values (`_` every 4 digits)
-type OctSpacer = 'Just '(4,"_") -- ^ Default spacer for octal values (`_` every 4 digits)
-type BinSpacer = 'Just '(8,"_") -- ^ Default spacer for binary values (`_` every 8 digits)
-type SpacerEvery n = 'Just '(n,"_") -- ^ Add `_` every /n/ digits.
+type DecSpacer = 'Just '(3,"_") -- ^ Default spacer for decimal values (@_@ every 3 digits)
+type HexSpacer = 'Just '(4,"_") -- ^ Default spacer for hexadecimal values (@_@ every 4 digits)
+type OctSpacer = 'Just '(4,"_") -- ^ Default spacer for octal values (@_@ every 4 digits)
+type BinSpacer = 'Just '(8,"_") -- ^ Default spacer for binary values (@_@ every 8 digits)
+type SpacerEvery n = 'Just '(n,"_") -- ^ Add @_@ every /n/ digits.
 type NoSpacer = 'Nothing :: (Maybe NSPair) -- ^ Do not add spacers.
 
 
@@ -759,6 +760,7 @@ instance Waveform Bool where
     [ tConst $ Just ("False","$bool_false",11)
     , tConst $ Just ("True" ,"$bool_true" ,11) ]
 
+-- | Configure styles through style variables `maybe_nothing` and `maybe_just`.
 instance (Waveform a) => Waveform (Maybe a) where
   translator = Translator (width @(Maybe a)) $ TSum
     [ Translator 0 $ TConst $ Translation (Just ("Nothing","$maybe_nothing",11)) []
