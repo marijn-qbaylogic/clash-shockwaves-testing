@@ -60,6 +60,7 @@ main = do
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.Normalise       #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Shockwaves.Trace
   (
@@ -128,11 +129,13 @@ import           Data.List             (foldl1', unzip5, transpose, uncons)
 import qualified Data.Map.Strict       as Map
 import           Data.Maybe            (fromMaybe, catMaybes)
 import qualified Data.Text             as Text
+import           Data.Default          (Default(..))
 import           Data.Time.Clock       (UTCTime, getCurrentTime)
 import           Data.Time.Format      (formatTime, defaultTimeLocale)
 import           GHC.Natural           (Natural)
 import           GHC.Stack             (HasCallStack)
 import           GHC.TypeLits          (KnownNat, type (+))
+import           GHC.Generics (Generic)
 import           System.IO.Unsafe      (unsafePerformIO)
 import           Type.Reflection       (Typeable, TypeRep, typeRep)
 import qualified Data.Aeson as Json
@@ -168,13 +171,34 @@ type TypeRepBS = ByteString
 
 type AddValue = LUTMap -> LUTMap
 type TraceMap = Map.Map String (TypeRepBS, Period, Width, [AddValue], [Value])
-type Maps     = (SignalMap,TypeMap,TraceMap)
+data Maps     = Maps{signalMap::SignalMap,typeMap::TypeMap,traceMap::TraceMap}
+  deriving (Generic,Default)
 
 type JSON = Json.Value
 
+
+
+-- | Check if a signal name already occurs in the trace map.
+checkUniqueTrace :: SignalName -> Maps -> Maps
+checkUniqueTrace name m@Maps{traceMap} =
+  if Map.member name traceMap then
+    error $ "Already tracing a signal with the name: '" ++ name ++ "'."
+  else
+    m
+
+-- | Add a signal's type to the signal map, and the type's translator to the type map.
+addSignal :: forall a. Waveform a => SignalName -> Maps -> Maps
+addSignal name m@Maps{signalMap,typeMap} =
+  if Map.member name signalMap then
+    error $ "Already tracing a signal with the name: '" ++ name ++ "'."
+  else
+    m{signalMap = Map.insert name (typeName @a) signalMap
+    , typeMap = addTypes @a typeMap }
+
+
 -- | Map of traces used by the non-internal trace and dumpvcd functions.
 maps# :: IORef Maps
-maps# = unsafePerformIO $ newIORef (Map.empty,Map.empty,Map.empty)
+maps# = unsafePerformIO $ newIORef def
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceMap# #-}
 
@@ -206,24 +230,25 @@ traceSignal#
   -- ^ Signal to trace
   -> IO (Signal dom a)
 traceSignal# maps period traceName signal =
-  atomicModifyIORef' maps $ \(signals,types,traces) ->
-    if Map.member traceName traces then
-      error $ "Already tracing a signal with the name: '" ++ traceName ++ "'."
-    else
-      ( ( Map.insert ("logic." <> traceName) (typeName @a) signals
-        , addTypes @a types
-        , Map.insert
-            traceName
-            ( encode (typeRep @a)
-            , period
-            , width
-            , if hasLut @a then map ((\f -> maybe id (const $ foldl1 (.) f) $ uncons f) . addValue) $ sample signal else repeat id
-            , mkTrace signal)
-            traces
-        )
-      , signal)
- where
-  width = snatToNum (SNat @(BitSize a))
+  atomicModifyIORef' maps (\m ->
+    let
+      path = "logic." <> traceName
+      width = snatToNum (SNat @(BitSize a))
+      addTrace m'@Maps{traceMap} = m'{traceMap = Map.insert
+          traceName
+          ( encode (typeRep @a)
+          , period
+          , width
+          , if hasLut @a then map ((\f -> maybe id (const $ foldl1 (.) f) $ uncons f) . addValue) $ sample signal else repeat id
+          , mkTrace signal)
+          traceMap }
+    in
+      (   addTrace
+        . addSignal @a path
+        . checkUniqueTrace traceName
+        $ m
+      , signal ) )
+
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceSignal# #-}
 
@@ -383,7 +408,7 @@ dumpVCD##
   -> Maps
   -> UTCTime
   -> Either String (Text.Text, JSON)
-dumpVCD## (offset, cycles) (signalMap,typeMap,traceMap) now
+dumpVCD## (offset, cycles) Maps{signalMap,typeMap,traceMap} now
   | offset < 0 =
       error $ "dumpVCD: offset was " ++ show offset ++ ", but cannot be negative."
   | cycles < 0 =
@@ -568,7 +593,7 @@ dumpReplayable
   -> IO ByteString
 dumpReplayable n oSignal traceName = do
   waitForTraces# maps# oSignal [traceName]
-  replaySignal <- (Map.! traceName) . (\(_a,_b,c)->c) <$> readIORef maps#
+  replaySignal <- (Map.! traceName) . traceMap <$> readIORef maps#
   let (tRep, _period, _width, _addValues, samples) = replaySignal
   pure (ByteStringLazy.concat (tRep : map encode (take n samples)))
 
@@ -624,12 +649,12 @@ waitForTraces#
   -- ^ The names of the traces you definitely want to be dumped to the VCD file
   -> IO ()
 waitForTraces# maps signal traceNames = do
-  written <- atomicWriteIORef maps (Map.empty,Map.empty,Map.empty)
+  written <- atomicWriteIORef maps def
   rest <- foldM go (written `pseq` signal) traceNames
   seq rest (return ())
  where
   go (s0 :- ss) nm = do
-    (_,_,m) <- readIORef maps
+    Maps{traceMap=m} <- readIORef maps
     if Map.member nm m then
       deepseqX s0 (return ss)
     else

@@ -159,7 +159,7 @@ translateBin = translateBinT (translator @a)
 
 -- | Register this type and all its subtypes.
 addTypes :: forall a. Waveform a => TypeMap -> TypeMap
-addTypes = addTypesT $ translator @a
+addTypes = addTypesT $ tRef (Proxy @a)
 
 -- | Helper function that fills the 'styles' list with 'WSDefault'.
 styles' :: forall a. Waveform a => [WaveStyle]
