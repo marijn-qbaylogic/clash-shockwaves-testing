@@ -11,7 +11,9 @@ module Clash.Shockwaves.Internal.BitList where
 import           Clash.Prelude hiding (take,split,concat,drop)
 import           Clash.Sized.Internal.BitVector
 import           Data.Aeson hiding (Value)
+import           Data.Aeson.Types (toJSONKeyText)
 import           Data.String (IsString (fromString))
+import qualified Data.Text as Text
 
 -- | A type like 'BitVector', but with a dynamic size.
 -- It is meant to make type-independent handling of binary representations possible.
@@ -105,7 +107,8 @@ instance ToJSON BitList where
   toJSON = toJSON . show
 
 instance ToJSONKey BitList where
-
+  toJSONKey = toJSONKeyText (Text.pack . show)
+    
 -- | When converting from a string, `0` and `1` are interpreted as bits, and
 -- `_` is treated as a spacer (is ignored). Any other characters are interpreted
 -- as unknown bits.

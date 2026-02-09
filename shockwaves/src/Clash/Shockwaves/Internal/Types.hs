@@ -343,7 +343,7 @@ instance ToJSON WaveStyle where
     WSDefault   -> "D"
     WSError     -> "E"
     WSHidden    -> "H"
-    WSInherit n -> object ["I" .= [n]]
+    WSInherit n -> object ["I" .= n]
     WSNormal    -> "N"
     WSWarn      -> "W"
     WSUndef     -> "U"
