@@ -8,6 +8,12 @@ maintainer:          QBayLogic B.V. <devops@qbaylogic.com>
 Data-files:
   prims/common/Clash_Shockwaves_Trace.primitives.yaml
 
+flag large-tuples
+  description:
+    Generate instances for `Waveform` for tuples up to the GHC imposed maximum.
+  default: False
+  manual: True
+
 common common-options
   default-extensions:
     BangPatterns
@@ -91,6 +97,7 @@ common common-options
     extra,
     integer-logarithms,
     data-default,
+    template-haskell,
 
     -- clash-prelude will set suitable version bounds for the plugins
     clash-prelude >= 1.8.2 && < 1.10,
@@ -102,6 +109,8 @@ common common-options
 library
   import: common-options
   cpp-options: -DCABAL
+  if flag(large-tuples)
+    CPP-Options: -DLARGE_TUPLES
   hs-source-dirs: src
   exposed-modules:
     Paths_shockwaves
@@ -119,6 +128,7 @@ library
     Clash.Shockwaves.Internal.Translator
     Clash.Shockwaves.Internal.Util
     Clash.Shockwaves.Internal.Trace.CRE
+    Clash.Shockwaves.Internal.TH.Waveform
   default-language: Haskell2010
 
 -- Builds the executable 'clash', with shockwaves project in scope
