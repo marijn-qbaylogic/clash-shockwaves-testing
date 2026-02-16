@@ -1,0 +1,25 @@
+
+name: surfer-compile
+
+on:
+  push:
+    tags:
+      - 'v**'
+  workflow_dispatch:
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Compile extension
+        run: |
+          cd $GITHUB_WORKSPACE/surfer_extension
+          ./compile.sh here
+      - name: Upload WASM file
+        uses: actions/upload-artifact@v4
+        with:
+          name: WASM Surfer extension
+          path: $GITHUB_WORKSPACE/surfer_extension/surfer_shockwaves.wasm
