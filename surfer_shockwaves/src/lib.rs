@@ -1127,7 +1127,7 @@ pub fn new() -> FnResult<()> {
 
 #[plugin_fn]
 pub fn name() -> FnResult<String> {
-    let version = include_str!("../../VERSION");
+    let version = include_str!("../VERSION");
 
     Ok("Shockwaves ".to_string() +
         if version.is_empty() {datetime_str!()} else {version}
