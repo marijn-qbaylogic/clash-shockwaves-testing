@@ -61,3 +61,13 @@ instance WaveformLUT L where
 
       styleL (La _ _) = "red"
       styleL (Lb _ _) = "green"
+
+
+newtype Pointer a = Pointer (Unsigned a) deriving (Generic,BitPack,NFDataX,Typeable,ShowX)
+
+instance KnownNat a =>Waveform (Pointer a) where
+  translator = Translator (width @(Unsigned a)) $ TAdvancedSum
+    { index = (0,width @(Unsigned a))
+    , defTrans = Translator (width @(Unsigned a)) $ TNumber NFHex (Just (2,"_")) 
+    , rangeTrans = [((0,1),tConst $ Just ("NULL",WSWarn,11))]
+    }

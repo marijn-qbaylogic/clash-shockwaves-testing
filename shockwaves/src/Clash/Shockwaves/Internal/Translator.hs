@@ -177,25 +177,24 @@ translateFromSubs (Translator _ translator) subs = case translator of
 
 -- | Translate a 'BitList' using the provided translator.
 translateBinT :: Translator -> BitList -> Translation
-translateBinT trans@(Translator width variant) bin@(BL _ _ blLength)
-  | width <= blLength = case variant of
+translateBinT trans@(Translator width variant) bin''@(BL _ _ blLength)
+  | width <= blLength, bin <- BL.take width bin'' = case variant of
     TRef _ TypeRef{translateBinRef} -> translateBinRef bin
     TLut _ TypeRef{translateBinRef} -> translateBinRef bin
     TNumber{format,spacer} -> Translation (if isJust render then render else Just ("undefined",WSError,11) ) []
       where
         bin' = show bin
         render :: Render
-        render = (\(v,s,p) -> (applySpacer spacer v,s,p)) <$> case format of
-          NFBin -> Just ("0b"<>bin'                             , undefstyle, 11)
-          NFOct -> Just ("0o"<>(hexDigit <$> chunksOf 3 extend3), undefstyle, 11)
-          NFHex -> Just ("0X"<>(hexDigit <$> chunksOf 4 extend4), undefstyle, 11)
-          NFUns -> (\i -> (show i, WSDefault, 11)) <$> decodeUns 0 bin'
-          NFSig -> (\i -> (show i, WSDefault, if i>=0 then 11 else 0)) <$> decodeSig bin' --todo: decode, translate, format etc.
-        undefbits = 'x' `elem` bin'
-        undefstyle = if undefbits then WSError else WSDefault
-        extend3 = L.replicate (2 - ((n+2) `rem` 3)) '0' <> bin'
-        extend4 = L.replicate (3 - ((n+3) `rem` 4)) '0' <> bin'
-        n = fromIntegral $ maybe 0 fst spacer :: Int
+        render = (\((pref,v),s,p) -> (pref <> applySpacer spacer v,s,p)) <$> case format of
+          NFBin -> Just (("0b",bin')                                  , undefStyle, 11)
+          NFOct -> Just (("0o",hexDigit <$> chunksOf 3 (extendBits 3)), undefStyle, 11)
+          NFHex -> Just (("0X",hexDigit <$> chunksOf 4 (extendBits 4)), undefStyle, 11)
+          NFUns -> (\i -> (("",show i), WSDefault, 11))                     <$> decodeUns 0 bin'
+          NFSig -> (\i -> (("",show i), WSDefault, if i>=0 then 11 else 0)) <$> decodeSig bin'
+
+        undefStyle = if 'x' `elem` bin' then WSError else WSDefault
+        extendBits k = L.replicate (k-1 - ((width+k-1) `rem` k)) '0' <> bin'
+
         hexDigit :: String -> Char
         hexDigit b = fromMaybe 'x' (((`showHex` "") <$> decodeUns 0 b :: Maybe String) >>= ((fst <$>) . L.uncons))
 
@@ -214,7 +213,7 @@ translateBinT trans@(Translator width variant) bin@(BL _ _ blLength)
         where
           t = fromMaybe defTrans $ asum $ L.map go rangeTrans
           go ((a,b),t') | a<=i && i<b = Just t'
-                      | otherwise = Nothing
+                        | otherwise = Nothing
       Nothing -> errorT "undefined"
 
     TProduct{ subs }

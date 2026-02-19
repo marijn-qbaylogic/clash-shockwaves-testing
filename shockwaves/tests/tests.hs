@@ -125,6 +125,7 @@ structureTest = testGroup "TRANSLATION MATCHES TRANSLATOR STRUCTURE"
   , testGroup "Maybe" $ testAll testS [Nothing, Just True, undef]
   , testGroup "Vec 2" $ testAll testS [True :> False :> Nil, undef :> undef :> Nil, undef]
   , testGroup "Vec 0" $ testAll testS [Nil @Bool, undef]
+  , testGroup "Pointer" $ testAll testS [Pointer @32 0, Pointer 1, Pointer 2, Pointer undef, undef]
   ]
 
 
@@ -178,6 +179,8 @@ renderTest = testGroup "RENDERED STRING IS CORRECT"
                                   ["Just (False <A> False)", "Just undefined","undefined"]
   , testGroup "Signed 32" $ renders [ 0 ,  12345 ,   -123456789 :: Signed 32]
                                     ["0","12_345","-123_456_789"            ]
+  , testGroup "Pointer 16" $ renders (Pointer @16 <$> [    0 ,       1 ,       2 ])
+                                                      ["NULL","0X00_01","0X00_02"]
   ]
 
 
@@ -256,7 +259,7 @@ translationTest = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
     , (undef :> undef :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
     , (True  :> undef               , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
     , (undef                        , \( T _ ["0":@ _,"1":@ _]                                                  )->0) ]
-
+    
 --   , testCase "debug Maybe L" $ assertFailure . show $ translator @(Maybe L)
 --   , testCase "debug L" $ assertFailure . show $ translator @L
 --   , testCase "debug L" $ assertFailure . show $ translate (La True False)
