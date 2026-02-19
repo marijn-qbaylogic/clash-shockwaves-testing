@@ -153,6 +153,8 @@ data TranslatorVariant
   -- If no ranges match, the @defTrans@ is used.
   --
   -- The selected translator is passed the full binary.
+  --
+  -- **Important**: Slice indices start to the left, i.e. with the MSB!
   | TAdvancedSum
     { index :: Slice -- ^ Slice of inputs to use
     , defTrans :: Translator -- ^ Default translator
@@ -212,6 +214,8 @@ data TranslatorVariant
   -- First, a number of slices of the binary are translated.
   -- Then, the subsignals are picked from these translations,
   -- and the value is constructed from fixed strings and values from the translators.
+  --
+  -- **Important**: Slice indices start to the left, i.e. with the MSB!
   | TAdvancedProduct
     { sliceTrans :: [(Slice,Translator)]
       -- ^ A list of slices of the input, and translators to translate them with.
@@ -261,7 +265,7 @@ data TranslatorVariant
 data BitPart
   = BPConcat [BitPart] -- ^ Pass the binary data onto multiple 'BitPart's, and concatenate their results.
   | BPLit BitList -- ^ Return the 'BitList', ignoring the input.
-  | BPSlice Slice -- ^ Return a slice of the input.
+  | BPSlice Slice -- ^ Return a slice of the input. **Important**: slice indices start to the left, i.e. with the MSB!
   deriving (Show)
 
 -- | Parts of the value of 'TAdvancedProduct'.
@@ -286,6 +290,12 @@ instance IsString WaveStyle where
   fromString s =
       WSColor . toSRGB24 . fromJust
     $ (readColourName s :: (Maybe (Colour Double)))
+
+instance IsString ValuePart where
+  fromString = VPLit
+
+instance IsString BitPart where
+  fromString s = BPLit $ fromString s
 
 instance ToJSON BitPart where
   toJSON (BPConcat bp) = object ["C" .= bp]

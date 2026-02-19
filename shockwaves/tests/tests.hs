@@ -126,6 +126,7 @@ structureTest = testGroup "TRANSLATION MATCHES TRANSLATOR STRUCTURE"
   , testGroup "Vec 2" $ testAll testS [True :> False :> Nil, undef :> undef :> Nil, undef]
   , testGroup "Vec 0" $ testAll testS [Nil @Bool, undef]
   , testGroup "Pointer" $ testAll testS [Pointer @32 0, Pointer 1, Pointer 2, Pointer undef, undef]
+  , testGroup "NumRep" $ testAll testS $ NumRep <$> [0,1,3,4,7 :: Unsigned 3]
   ]
 
 
@@ -181,6 +182,10 @@ renderTest = testGroup "RENDERED STRING IS CORRECT"
                                     ["0","12_345","-123_456_789"            ]
   , testGroup "Pointer 16" $ renders (Pointer @16 <$> [    0 ,       1 ,       2 ])
                                                       ["NULL","0X00_01","0X00_02"]
+  , testGroup "NumRep U3" $ renders [NumRep (3::Unsigned 3)]
+                                    ["{3, odd=True}"       ]
+  , testGroup "LittleEndian" $ renders (LittleEndian <$> [             0 ,             1 ,            16 ,           256 ,         65536 ])
+                                                         ["0Xxe_00_00_00","0Xxe_01_00_00","0Xxe_10_00_00","0Xxe_00_01_00","0Xxe_00_00_01"]
   ]
 
 
@@ -259,11 +264,8 @@ translationTest = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
     , (undef :> undef :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
     , (True  :> undef               , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
     , (undef                        , \( T _ ["0":@ _,"1":@ _]                                                  )->0) ]
-    
---   , testCase "debug Maybe L" $ assertFailure . show $ translator @(Maybe L)
---   , testCase "debug L" $ assertFailure . show $ translator @L
---   , testCase "debug L" $ assertFailure . show $ translate (La True False)
---   , testCase "debug L" $ assertFailure . show $ precL (La True False)
+  , testGroup "NumRep U3" $ pats
+    [ (NumRep (1::Unsigned 3)       , \( T _ ["bin":@ _,"oct":@ _, "hex":@ _, "unsigned":@ _, "signed":@ _,"odd":@ _] )->0)]
   ]
 
 
