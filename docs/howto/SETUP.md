@@ -2,7 +2,7 @@
 
 To start using shockwaves, you need three things:
 - the latest version of [Surfer](https://gitlab.com/surfer-project/surfer)
-- the Shockwaves Surfer extension (this repo, in `/surfer_shockwaves/`)
+- the Shockwaves Surfer extension (see the `surfer_shockwaves` folder; compiled versions can be found as artefacts under the Actions tab)
 - the `Clash.Shockwaves` Haskell library (this repo, in `/shockwaves/`)
 
 Install Surfer (see [TODO:link]) and add the Shockwaves extension (instructions below).
