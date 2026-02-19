@@ -520,7 +520,7 @@ impl State {
                             None => {return error("unknown")},
                         }
                     },
-                    NumberFormat::Bin   => (apply_spacer(&spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Default},11),
+                    NumberFormat::Bin   => ("0b".to_owned()+&apply_spacer(&spacer,value.to_string()),if value.contains('x') {WaveStyle::Error} else {WaveStyle::Default},11),
                     NumberFormat::Hex | NumberFormat::Oct => {
                         let (chunksize, prefix) = match format {
                             NumberFormat::Oct => (3,"0o"),
@@ -541,7 +541,7 @@ impl State {
                             }
                         }
 
-                        let val = prefix.to_owned() + &blocks.concat();
+                        let val = prefix.to_owned() + &apply_spacer(spacer,blocks.concat());
                         let style = if val.contains("x") {WaveStyle::Error} else {WaveStyle::Default}; 
                         (val,style,11)
                     }
