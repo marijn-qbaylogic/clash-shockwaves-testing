@@ -228,7 +228,9 @@ enum TranslatorVariant {
 
     #[serde(alias = "B")]
     ChangeBits {
+        #[serde(alias = "t")]
         sub: Box<Translator>,
+        #[serde(alias = "b")]
         bits: BitPart,
     },
 }
