@@ -19,7 +19,7 @@ import qualified Data.List as L
 import           Data.List.Split (chunksOf)
 import qualified Data.Map as M
 import           Data.Map (Map)
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe,listToMaybe)
 import           Data.Aeson (encodeFile,ToJSON)
 import           Data.Char (isAlpha)
 import           Data.Proxy
@@ -65,7 +65,7 @@ parenthesize n = "("<>n<>")"
 
 -- | Add parentheses around an identifier if it is an operator.
 safeName :: Value -> Value
-safeName n = if isAlpha $ L.head n then n else parenthesize n
+safeName n = if isAlpha $ fromMaybe '_' $ listToMaybe n then n else parenthesize n
 
 -- | Join a list of values with a separator. If the list is empty, an empty
 -- value is returned.
