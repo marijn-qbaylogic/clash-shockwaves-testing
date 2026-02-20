@@ -1,4 +1,4 @@
-name: M-pipeline-sorting-test
+name: -pipeline-sorting-test
 
 on:
   workflow_dispatch:
