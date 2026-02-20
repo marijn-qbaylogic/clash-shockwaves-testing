@@ -14,7 +14,7 @@ import Clash.Shockwaves.Trace as T
 
 import Tests.Types
 
-import Data.Text as Text
+import qualified Data.Text as Text
 -- import Data.Proxy
 -- import Data.Typeable
 import qualified Data.List as L
