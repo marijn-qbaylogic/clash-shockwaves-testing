@@ -1,12 +1,12 @@
 module Clash.Shockwaves.Internal.TH.Waveform where
 
 import           Prelude
-import           Data.List (foldl')
+-- import           Data.List (foldl')
 import           Language.Haskell.TH
 
-import           GHC.Generics (Generic,Rep)
-import           Data.Typeable (Typeable)
-import           Clash.Prelude (BitPack)
+import           GHC.Generics (Rep) --Generic
+-- import           Data.Typeable (Typeable)
+-- import           Clash.Prelude (BitPack)
 import           Clash.Shockwaves.Internal.Types (Translator(..),TranslatorVariant(..))
 import           Control.Monad (replicateM)
 
@@ -16,11 +16,11 @@ deriveWaveformTuples
   :: Int -> Int -> DecsQ
 deriveWaveformTuples minSize maxSize = do
   let waveform  = ConT $ mkName "Waveform"
-      waveformG = ConT $ mkName "WaveformG"
+      -- waveformG = ConT $ mkName "WaveformG"
 
-      bitPack = ConT ''BitPack
-      typeable = ConT ''Typeable
-      generic = ConT ''Generic
+      -- bitPack = ConT ''BitPack
+      -- typeable = ConT ''Typeable
+      -- generic = ConT ''Generic
       rep = ConT ''Rep
       unit = ConT ''()
   

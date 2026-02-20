@@ -32,7 +32,7 @@ import           GHC.Generics
 import           Data.Proxy
 import           Data.Typeable
 import qualified Data.List            as L
-import           Data.Maybe           (fromMaybe)
+import           Data.Maybe           (fromMaybe,listToMaybe)
 import           Data.Char            (isAlpha)
 
 -- for standard type instances
@@ -83,6 +83,12 @@ tFromVal v = Translation (rFromVal v) []
 -- | Create an error value from an optional error message.
 errMsg :: Maybe Value -> Value
 errMsg = maybe "undefined" (\e -> "{undefined: "<>e<>"}")
+
+
+-- to get rid of warnings:
+styHead :: [WaveStyle] -> WaveStyle
+styHead (s:_) = s
+styHead _ = error "style list must be long enough"
 
 
 
@@ -304,7 +310,7 @@ instance (WaveformG (fields k), KnownSymbol name)
   => WaveformG (C1 (MetaCons name fix True) fields k) where
   translatorG _ sty = t'
     where
-      t' = case L.head sty of
+      t' = case styHead sty of
         WSDefault ->
           if L.length subs == 1 then
             tStyled (WSInherit 0) t
@@ -336,7 +342,7 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
   => WaveformG (C1 (MetaCons name fix False) fields k) where
   translatorG _ sty = t'
     where
-      t' = case L.head sty of
+      t' = case styHead sty of
         WSDefault ->
           if L.length subs == 1 then
             tStyled (WSInherit 0) t
@@ -369,7 +375,7 @@ instance (WaveformG (fields k), KnownSymbol name, PrecF fix)
               }
 
       sname = safeName (sym @name)
-      isOperator = not (isAlpha . L.head $ sym @name) && (L.length subs == 2)
+      isOperator = not (isAlpha $ fromMaybe '_' $ listToMaybe $ sym @name) && (L.length subs == 2)
 
   constrTranslatorsG sty =
     [ tDup (sym @name)

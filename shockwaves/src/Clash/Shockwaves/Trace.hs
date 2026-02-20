@@ -100,7 +100,7 @@ module Clash.Shockwaves.Trace
 import           Prelude
 
 -- Clash:
-import           Clash.Annotations.Primitive (hasBlackBox)
+-- import           Clash.Annotations.Primitive (hasBlackBox)
 import           Clash.Signal.Internal (fromList)
 import           Clash.Signal
   (KnownDomain(..), SDomainConfiguration(..), Signal, bundle, unbundle)
@@ -135,8 +135,8 @@ import           Data.Time.Format      (formatTime, defaultTimeLocale)
 import           GHC.Natural           (Natural)
 import           GHC.Stack             (HasCallStack)
 import           GHC.TypeLits          (KnownNat, type (+))
-import           GHC.Generics (Generic)
-import           System.IO.Unsafe      (unsafePerformIO)
+import           GHC.Generics          (Generic)
+-- import           System.IO.Unsafe      (unsafePerformIO)
 import           Type.Reflection       (Typeable, TypeRep, typeRep)
 import qualified Data.Aeson as Json
 import           Data.Aeson            ((.=))
@@ -305,7 +305,7 @@ traceSignal traceName signal =
         traceSignal# maps# (snatToNum sPeriod) traceName signal
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceSignal #-}
-{-# ANN traceSignal hasBlackBox #-}
+-- {-# ANN traceSignal hasBlackBox #-}
 
 -- | Trace a single signal. Will emit an error if a signal with the same name
 -- was previously registered.
@@ -328,7 +328,7 @@ traceSignal1 traceName signal =
   unsafePerformIO (traceSignal# maps# 1 traceName signal)
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceSignal1 #-}
-{-# ANN traceSignal1 hasBlackBox #-}
+-- {-# ANN traceSignal1 hasBlackBox #-}
 
 -- | Trace a single vector signal: each element in the vector will show up as
 -- a different trace. If the trace name already exists, this function will emit
@@ -357,7 +357,7 @@ traceVecSignal traceName signal =
         traceVecSignal# maps# (snatToNum sPeriod) traceName signal
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceVecSignal #-}
-{-# ANN traceVecSignal hasBlackBox #-}
+-- {-# ANN traceVecSignal hasBlackBox #-}
 
 -- | Trace a single vector signal: each element in the vector will show up as
 -- a different trace. If the trace name already exists, this function will emit
@@ -382,7 +382,7 @@ traceVecSignal1 traceName signal =
   unsafePerformIO $ traceVecSignal# maps# 1 traceName signal
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceVecSignal1 #-}
-{-# ANN traceVecSignal1 hasBlackBox #-}
+-- {-# ANN traceVecSignal1 hasBlackBox #-}
 
 iso8601Format :: UTCTime -> String
 iso8601Format = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S"
