@@ -275,19 +275,22 @@ lazy_static! {
 lazy_static! {
     static ref TRANSLATOR_NOT_FOUND: Translator = Translator {
         width: 0,
-        trans: TranslatorVariant::Const(Translation(
-            Some((String::from("{translator not found}"), WaveStyle::Error, 11)),
-            vec![]
-        ))
+        trans: TranslatorVariant::Const(error("{translator not found}")),
     };
 }
 
-// helper functions
+// constants
+/// Precedence of an atomic (a number, an identifier, somthing between parentheses)
+const ATOMIC: Prec = 11;
 
+// helper functions
+/// Get the name of a signal as a period separated string (i.e. `logic.module.signal`).
 fn signal_name(signal: &VariableMeta) -> String {
     signal.var.path.strs.join(".") + "." + &signal.var.name
 }
 
+/// Get the value of a translation, wrapped in parentheses if the outer precedence
+/// is not lower.
 fn val_with_prec(translation: &Translation, preco: Prec) -> Vec<&str> {
     match &translation.0 {
         Some((value, _, preci)) => {
@@ -299,6 +302,115 @@ fn val_with_prec(translation: &Translation, preco: Prec) -> Vec<&str> {
         }
         None => vec!["{value missing}"],
     }
+}
+
+/// Create a translation from an error message. Its value is regarded as atomic.
+fn error(msg: &str) -> Translation {
+    Translation(Some((String::from(msg), WaveStyle::Error, ATOMIC)), vec![])
+}
+
+fn translate_number(value: &str, format: &NumberFormat, spacer: &NumberSpacer) -> Translation {
+    let apply_spacer = |v: String| match spacer {
+        None => v,
+        Some((0, _)) => v,
+        Some((n, s)) => {
+            let n = *n as i32;
+            let mut chunks = vec![];
+            let mut i = v.len() as i32;
+            while i > 0 {
+                chunks.push(&v[0i32.max(i - n) as usize..i as usize]);
+                i -= n;
+            }
+            let mut res = vec![];
+            for i in 0..chunks.len() {
+                res.push(chunks[i]);
+                if i + 1 < chunks.len() && chunks[i + 1] != "-" {
+                    res.push(s);
+                }
+            }
+            res.reverse();
+            res.join("")
+        }
+    };
+
+    Translation(
+        Some(match format {
+            NumberFormat::Sig => {
+                // slightly cursed way of doing this - convert to base 256 (bytes), then to bigint, then to string
+                let n = value.len().div_ceil(8);
+                let mut bytes = vec![0u8; n];
+                for i in 0..(8 * n) {
+                    let j = if i >= value.len() {
+                        0 //sign extend by saturating index to end
+                    } else {
+                        value.len() - 1 - i
+                    };
+                    let c = value.chars().nth(j);
+                    if c == Some('1') {
+                        bytes[i / 8] |= (1 << (i % 8)) as u8;
+                    } else if c == Some('0') {
+                        //pass
+                    } else {
+                        return error("unknown");
+                    }
+                }
+
+                let big = BigInt::from_signed_bytes_le(&bytes);
+                let bigstr = big.to_string();
+                let prec = if bigstr.starts_with('-') { 0 } else { ATOMIC };
+
+                (apply_spacer(bigstr), WaveStyle::Default, prec)
+            }
+            NumberFormat::Uns => {
+                if value.is_empty() {
+                    ("0".to_string(), WaveStyle::Default, ATOMIC)
+                } else {
+                    match BigUint::parse_bytes(value.as_bytes(), 2) {
+                        Some(big) => (apply_spacer(big.to_string()), WaveStyle::Default, ATOMIC),
+                        None => return error("unknown"),
+                    }
+                }
+            }
+            NumberFormat::Bin => (
+                "0b".to_owned() + &apply_spacer(value.to_string()),
+                if value.contains('x') {
+                    WaveStyle::Error
+                } else {
+                    WaveStyle::Default
+                },
+                ATOMIC,
+            ),
+            NumberFormat::Hex | NumberFormat::Oct => {
+                let (chunksize, prefix) = match format {
+                    NumberFormat::Oct => (3, "0o"),
+                    NumberFormat::Hex => (4, "0X"),
+                    _ => unreachable!(),
+                };
+                let mut blocks = vec![];
+                let mut block = vec![];
+                for (i, c) in value.chars().enumerate() {
+                    block.push(format!("{}", c));
+                    if (value.len() - i - 1).is_multiple_of(chunksize) {
+                        let chunk = block.concat();
+                        blocks.push(match u8::from_str_radix(&chunk, 2) {
+                            Ok(n) => format!("{:x}", n),
+                            Err(_) => "x".to_string(),
+                        });
+                        block.clear();
+                    }
+                }
+
+                let val = prefix.to_owned() + &apply_spacer(blocks.concat());
+                let style = if val.contains("x") {
+                    WaveStyle::Error
+                } else {
+                    WaveStyle::Default
+                };
+                (val, style, ATOMIC)
+            }
+        }),
+        vec![],
+    )
 }
 
 // main functions
@@ -330,7 +442,7 @@ impl State {
     }
 
     /// Determine the full structure of a signal.
-    fn structure(&mut self, signal: &String) -> VariableInfo {
+    fn structure(&mut self, signal: &str) -> VariableInfo {
         // lookup signal type
         let ty = self.data.get_type(signal).unwrap();
 
@@ -352,52 +464,39 @@ impl State {
     }
 
     /// Translate a value.
-    fn translate(&mut self, signal: &String, value: &str) -> TranslationResult {
-        // lookup signal type
+    fn translate(&mut self, signal: &str, value: &str) -> TranslationResult {
         let ty = self.data.get_type(signal).unwrap().clone();
-
-        // lookup type translator
-        let structure = if let Some(st) = self.cache.structures.get(&ty) {
-            st
-        } else {
-            self.cache
-                .structures
-                .insert(ty.clone(), self.data.type_structure(&ty));
-            self.cache.structures.get(&ty).unwrap()
-        };
         let translator = self.data.get_translator(&ty);
-
-        // translate value with translator
         let mut translation = self.translate_with(translator, value);
 
-        //propagate errors
+        //propagate styles
         if self.config.do_prop_errors() {
             translation.prop_errors();
         }
-
         translation.prop_style_inherit();
 
         //fill out missing unknown fields
+        let structure = self
+            .cache
+            .structures
+            .entry(ty.clone())
+            .or_insert_with(|| self.data.type_structure(&ty));
         translation.fill(structure);
 
-        // convert to TranslationResult
         translation.convert()
     }
 
-    /// Translate a value using the provided translator
-    // fn translate_with(&self, translator: &Translator, value: &str) -> Translation {
-    //     match self.translate_with_opt(translator,value) {
-    //         Some(t) => t,
-    //         _ => Translation(Some((String::from("{unknown}"),WaveStyle::Error,11)),vec![])
-    //     }
-    // }
+    /// Translate a value using the provided translator.
     fn translate_with(&self, Translator { width, trans }: &Translator, value: &str) -> Translation {
+        // Note that excess bits will be silently truncated; this is intended
+        // behavior that usually appears when a Sum translator translates a
+        // constructor that's smaller than other constructors.
         if (*width as usize) > value.len() {
             return error("{insufficient bits}");
         }
         let value = &value[..(*width as usize)];
 
-        return match trans {
+        match trans {
             TranslatorVariant::Array {
                 sub,
                 len,
@@ -414,20 +513,7 @@ impl State {
 
                 let mut res: Vec<&str> = vec![start];
                 for (i, t) in zip(0.., subs.iter()) {
-                    let p = match t.0 {
-                        Some((_, _, p)) => p,
-                        None => 11,
-                    };
-                    if p <= *preci {
-                        res.push("(");
-                    }
-                    res.push(match &t.0 {
-                        Some((v, _, _)) => v,
-                        None => "{value missing}",
-                    });
-                    if p <= *preci {
-                        res.push(")");
-                    }
+                    res.extend(val_with_prec(t, *preci));
                     if i != subs.len() - 1 {
                         res.push(sep);
                     }
@@ -459,109 +545,8 @@ impl State {
                 Translation(render, vec![(n.clone(), translation)])
             }
             TranslatorVariant::Number { format, spacer } => {
-                fn apply_spacer(sp: &NumberSpacer, v: String) -> String {
-                    match sp {
-                        None => v,
-                        Some((0, _)) => v,
-                        Some((n, s)) => {
-                            let n = *n as i32;
-                            let mut chunks = vec![];
-                            let mut i = v.len() as i32;
-                            while i > 0 {
-                                chunks.push(&v[0i32.max(i - n) as usize..i as usize]);
-                                i -= n;
-                            }
-                            let mut res = vec![];
-                            for i in 0..chunks.len() {
-                                res.push(chunks[i]);
-                                if i + 1 < chunks.len() && chunks[i + 1] != "-" {
-                                    res.push(s);
-                                }
-                            }
-                            res.reverse();
-                            res.join("")
-                        }
-                    }
-                }
-
                 let spacer = self.config.get_spacer_override(format).unwrap_or(spacer);
-
-                Translation(
-                    Some(match format {
-                        NumberFormat::Sig => {
-                            // slightly cursed way of doing this - convert to base 256 (bytes), then to bigint, then to string
-                            let n = value.len().div_ceil(8);
-                            let mut bytes = vec![0u8; n];
-                            for i in 0..(8 * n) {
-                                let j = if i >= value.len() {
-                                    0
-                                } else {
-                                    value.len() - 1 - i
-                                };
-                                let c = value.chars().nth(j);
-                                if c == Some('1') {
-                                    bytes[i / 8] |= (1 << (i % 8)) as u8;
-                                } else if c == Some('0') {
-                                } else {
-                                    //if let Some(_) = c {
-                                    return error("unknown");
-                                }
-                            }
-
-                            let big = BigInt::from_signed_bytes_le(&bytes);
-                            let bigstr = big.to_string();
-                            let prec = if bigstr.starts_with('-') { 0 } else { 11 };
-
-                            (apply_spacer(spacer, bigstr), WaveStyle::Default, prec)
-                        }
-                        NumberFormat::Uns => match BigUint::parse_bytes(value.as_bytes(), 2) {
-                            Some(big) => (
-                                apply_spacer(spacer, big.to_string()),
-                                WaveStyle::Default,
-                                11,
-                            ),
-                            None => return error("unknown"),
-                        },
-                        NumberFormat::Bin => (
-                            "0b".to_owned() + &apply_spacer(spacer, value.to_string()),
-                            if value.contains('x') {
-                                WaveStyle::Error
-                            } else {
-                                WaveStyle::Default
-                            },
-                            11,
-                        ),
-                        NumberFormat::Hex | NumberFormat::Oct => {
-                            let (chunksize, prefix) = match format {
-                                NumberFormat::Oct => (3, "0o"),
-                                NumberFormat::Hex => (4, "0X"),
-                                _ => unreachable!(),
-                            };
-                            let mut blocks = vec![];
-                            let mut block = vec![];
-                            for (i, c) in value.chars().enumerate() {
-                                block.push(format!("{}", c));
-                                if (value.len() - i - 1).is_multiple_of(chunksize) {
-                                    let chunk = block.concat();
-                                    blocks.push(match u8::from_str_radix(&chunk, 2) {
-                                        Ok(n) => format!("{:x}", n),
-                                        Err(_) => "x".to_string(),
-                                    });
-                                    block.clear();
-                                }
-                            }
-
-                            let val = prefix.to_owned() + &apply_spacer(spacer, blocks.concat());
-                            let style = if val.contains("x") {
-                                WaveStyle::Error
-                            } else {
-                                WaveStyle::Default
-                            };
-                            (val, style, 11)
-                        }
-                    }),
-                    vec![],
-                )
+                translate_number(value, format, spacer)
             }
             TranslatorVariant::Product {
                 subs,
@@ -593,16 +578,6 @@ impl State {
                 } else {
                     let mut res: Vec<&str> = vec![start];
                     for (i, (_, t)) in zip(0.., sub.iter()) {
-                        // let p = match t.0 {
-                        //     Some((_,_,p)) => p,
-                        //     None => 11
-                        // };
-                        // if p <= *preci {res.push("(");} // TODO: remove this commented code after verifying the new code works
-                        // res.push(match &t.0 {
-                        //     Some((v,_,_)) => &v,
-                        //     None => "{value missing}",
-                        // });
-                        // if p <= *preci {res.push(")");}
                         res.extend(val_with_prec(t, *preci));
                         if i != subs.len() - 1 {
                             res.push(sep);
@@ -646,7 +621,11 @@ impl State {
             TranslatorVariant::Sum(translators) => {
                 let n = translators.len();
                 let bits = (usize::BITS - (n - 1).leading_zeros()) as usize;
-                let variant = usize::from_str_radix(&value[..bits], 2);
+                let variant = if bits > 0 {
+                    usize::from_str_radix(&value[..bits], 2)
+                } else {
+                    Ok(0)
+                };
                 match variant {
                     Ok(variant) => {
                         if variant >= n {
@@ -683,10 +662,6 @@ impl State {
             TranslatorVariant::ChangeBits { sub, bits } => {
                 self.translate_with(sub, &bits.from(value))
             }
-        };
-
-        fn error(msg: &str) -> Translation {
-            Translation(Some((String::from(msg), WaveStyle::Error, 11)), vec![])
         }
     }
 }
@@ -724,7 +699,7 @@ impl Data {
     }
 
     /// Get the structure of a type
-    fn type_structure(&self, ty: &String) -> Structure {
+    fn type_structure(&self, ty: &str) -> Structure {
         // lookup type translator
         let trans = self.get_translator(ty);
 
@@ -789,17 +764,17 @@ impl Data {
     }
 
     /// Check whether a signal has a known associated Haskell type.
-    fn can_translate(&self, signal: &String) -> bool {
+    fn can_translate(&self, signal: &str) -> bool {
         self.signals.contains_key(signal)
     }
 
     /// Get the type of a signal
-    fn get_type(&self, signal: &String) -> Option<&String> {
+    fn get_type(&self, signal: &str) -> Option<&String> {
         self.signals.get(signal)
     }
 
     /// Get the translator of a signal. If there is no such translator, return a default translator that displays an error message.
-    fn get_translator(&self, ty: &String) -> &Translator {
+    fn get_translator(&self, ty: &str) -> &Translator {
         match self.types.get(ty) {
             Some(t) => t,
             None => &TRANSLATOR_NOT_FOUND,
@@ -905,7 +880,7 @@ impl Config {
     fn get_style_string(&mut self, ws: &str) -> Option<WaveStyle> {
         Some(match ws {
             ws if ws == "DEFAULT" || ws == "D" => WaveStyle::Default,
-            ws if ws == "ERROR" || ws == "E" => WaveStyle::Undef,
+            ws if ws == "ERROR" || ws == "E" => WaveStyle::Error,
             ws if ws == "HIDDEN" || ws == "H" => WaveStyle::Hidden,
             ws if ws == "INHERIT" || ws == "I" => WaveStyle::Inherit(0),
             ws if ws.starts_with("I ") => match ws[2..].parse::<u32>() {
