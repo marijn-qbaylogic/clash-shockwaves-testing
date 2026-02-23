@@ -1,6 +1,6 @@
+use crate::cache::*;
 use crate::config::*;
 use crate::data::*;
-use crate::cache::*;
 
 #[derive(Debug)]
 pub struct State {
@@ -18,9 +18,9 @@ impl State {
         }
     }
 
+    /// Store the new translation metadata and reset the cache.
     pub fn set_data(&mut self, data: Data) {
         self.data = data;
-        self.replace_wavestyles();
         self.cache = Cache::default();
     }
 }

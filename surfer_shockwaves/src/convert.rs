@@ -1,19 +1,19 @@
 /*
 
-Module for converting from Shockwaves types to Surfer types.
+Module for converting from Shockwaves types to Surfer types (structures, translations
+and styles).
 
 */
 
 use extism_pdk::error;
 use surfer_translation_types::{
-    SubFieldTranslationResult, TranslationResult, ValueKind, ValueRepr,
-    VariableInfo, 
+    SubFieldTranslationResult, TranslationResult, ValueKind, ValueRepr, VariableInfo,
 };
 
 use crate::data::*;
 
 impl Structure {
-    /// Convert flattened Shockwaves `Structure` to Surfer `VariableInfo`
+    /// Convert Shockwaves `Structure` to Surfer `VariableInfo`
     pub fn convert(&self) -> VariableInfo {
         if self.0.is_empty() {
             VariableInfo::String

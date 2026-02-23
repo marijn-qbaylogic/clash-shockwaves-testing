@@ -1,16 +1,15 @@
-use surfer_translation_types::TranslationResult;
 use extism_pdk::error;
+use surfer_translation_types::TranslationResult;
 
 use lazy_static::lazy_static;
-use std::iter::zip;
 use num_bigint::{BigInt, BigUint};
+use std::iter::zip;
 
 use crate::data::*;
 use crate::state::*;
 
-
-// globals
 lazy_static! {
+    // Constant "default" value for missing translators
     static ref TRANSLATOR_NOT_FOUND: Translator = Translator {
         width: 0,
         trans: TranslatorVariant::Const(error("{translator not found}")),
@@ -37,6 +36,7 @@ fn error(msg: &str) -> Translation {
     Translation(Some((String::from(msg), WaveStyle::Error, ATOMIC)), vec![])
 }
 
+/// Translate binary data as an integer.
 fn translate_number(value: &str, format: &NumberFormat, spacer: &NumberSpacer) -> Translation {
     let apply_spacer = |v: String| match spacer {
         None => v,
@@ -141,8 +141,8 @@ fn translate_number(value: &str, format: &NumberFormat, spacer: &NumberSpacer) -
     )
 }
 
-
 impl ValuePart {
+    /// Determine the value of a value part.
     fn make_value(&self, translations: &[Translation]) -> String {
         match self {
             ValuePart::Lit(s) => s.clone(),
@@ -152,6 +152,7 @@ impl ValuePart {
 }
 
 impl BitPart {
+    /// Manipulate bits according to the `BitPart` structure.
     fn from(&self, bits: &str) -> String {
         match self {
             BitPart::Concat(bps) => bps
@@ -165,19 +166,19 @@ impl BitPart {
     }
 }
 
-
 impl Data {
-    /// Check whether a signal has a known associated Haskell type.
+    /// Check whether a signal has a known associated type.
     pub fn can_translate(&self, signal: &str) -> bool {
         self.signals.contains_key(signal)
     }
 
-    /// Get the type of a signal
+    /// Get the type of a signal.
     pub fn get_type(&self, signal: &str) -> Option<&String> {
         self.signals.get(signal)
     }
 
-    /// Get the translator of a signal. If there is no such translator, return a default translator that displays an error message.
+    /// Get the translator of a signal. If there is no such translator, return a
+    /// default translator that displays an error message.
     pub fn get_translator(&self, ty: &str) -> &Translator {
         match self.types.get(ty) {
             Some(t) => t,
@@ -185,7 +186,6 @@ impl Data {
         }
     }
 }
-
 
 impl Translation {
     /// Fill out a translation according to the provided Structure. Currently O(n^2).
@@ -213,7 +213,7 @@ impl Translation {
         }
     }
 
-    /// Create an empty translation from a structure
+    /// Create an empty translation from a structure.
     fn from_struct(structure: &Structure) -> Self {
         Translation(
             None,
@@ -225,7 +225,7 @@ impl Translation {
         )
     }
 
-    /// Propagate error style upwards
+    /// Propagate error style upwards through the signal hierarchy.
     pub fn prop_errors(&mut self) -> bool {
         if self.1.iter_mut().any(|(_n, t)| t.prop_errors()) {
             if let Some((_, s, _)) = &mut self.0 {
@@ -236,7 +236,7 @@ impl Translation {
         matches!(self.0, Some((_, WaveStyle::Error, _)))
     }
 
-    /// Fill in inherited styles
+    /// Fill in inherited styles.
     pub fn prop_style_inherit(&mut self) {
         self.1.iter_mut().for_each(|(_n, t)| t.prop_style_inherit());
 
@@ -255,9 +255,6 @@ impl Translation {
             };
     }
 }
-
-
-
 
 impl State {
     /// Translate a value.
@@ -284,7 +281,11 @@ impl State {
     }
 
     /// Translate a value using the provided translator.
-    pub fn translate_with(&self, Translator { width, trans }: &Translator, value: &str) -> Translation {
+    pub fn translate_with(
+        &self,
+        Translator { width, trans }: &Translator,
+        value: &str,
+    ) -> Translation {
         // Note that excess bits will be silently truncated; this is intended
         // behavior that usually appears when a Sum translator translates a
         // constructor that's smaller than other constructors.
@@ -294,38 +295,13 @@ impl State {
         let value = &value[..(*width as usize)];
 
         match trans {
-            TranslatorVariant::Array {
-                sub,
-                len,
-                start,
-                sep,
-                stop,
-                preci,
-                preco,
-            } => {
-                let mut subs = vec![];
-                for i in 0u32..*len {
-                    subs.push(self.translate_with(sub, &value[(i * sub.width) as usize..]));
-                }
-
-                let mut res: Vec<&str> = vec![start];
-                for (i, t) in zip(0.., subs.iter()) {
-                    res.extend(val_with_prec(t, *preci));
-                    if i != subs.len() - 1 {
-                        res.push(sep);
-                    }
-                }
-                res.push(stop);
-
-                Translation(
-                    Some((res.join(""), WaveStyle::Default, *preco)),
-                    subs.into_iter()
-                        .enumerate()
-                        .map(|(i, t)| (format!("{i}"), t))
-                        .collect(),
-                )
-            }
+            /* Direct translators */
+            TranslatorVariant::Ref(ty) => self.translate_with(self.data.get_translator(ty), value),
             TranslatorVariant::Const(t) => t.clone(),
+            TranslatorVariant::Number { format, spacer } => {
+                let spacer = self.config.get_spacer_override(format).unwrap_or(spacer);
+                translate_number(value, format, spacer)
+            }
             TranslatorVariant::Lut(n, _) => match self.data.luts.get(n) {
                 Some(lut) => match lut.get(value) {
                     Some(t) => t.clone(),
@@ -333,18 +309,7 @@ impl State {
                 },
                 None => error("{unknown LUT}"),
             },
-            TranslatorVariant::Duplicate(n, t) => {
-                let translation = self.translate_with(t, value);
-                let render = translation
-                    .0
-                    .as_ref()
-                    .map(|(v, _, p)| (v.clone(), WaveStyle::Inherit(0), *p));
-                Translation(render, vec![(n.clone(), translation)])
-            }
-            TranslatorVariant::Number { format, spacer } => {
-                let spacer = self.config.get_spacer_override(format).unwrap_or(spacer);
-                translate_number(value, format, spacer)
-            }
+            /* Product translators */
             TranslatorVariant::Product {
                 subs,
                 start,
@@ -414,7 +379,38 @@ impl State {
                     .collect();
                 Translation(Some((value, WaveStyle::Default, *preco)), subs)
             }
-            TranslatorVariant::Ref(ty) => self.translate_with(self.data.get_translator(ty), value),
+            TranslatorVariant::Array {
+                sub,
+                len,
+                start,
+                sep,
+                stop,
+                preci,
+                preco,
+            } => {
+                let mut subs = vec![];
+                for i in 0u32..*len {
+                    subs.push(self.translate_with(sub, &value[(i * sub.width) as usize..]));
+                }
+
+                let mut res: Vec<&str> = vec![start];
+                for (i, t) in zip(0.., subs.iter()) {
+                    res.extend(val_with_prec(t, *preci));
+                    if i != subs.len() - 1 {
+                        res.push(sep);
+                    }
+                }
+                res.push(stop);
+
+                Translation(
+                    Some((res.join(""), WaveStyle::Default, *preco)),
+                    subs.into_iter()
+                        .enumerate()
+                        .map(|(i, t)| (format!("{i}"), t))
+                        .collect(),
+                )
+            }
+            /* Sum translators */
             TranslatorVariant::Sum(translators) => {
                 let n = translators.len();
                 let bits = (usize::BITS - (n - 1).leading_zeros()) as usize;
@@ -449,6 +445,15 @@ impl State {
                 }
                 Err(_) => error("unknown"),
             },
+            /* Manipulating translators */
+            TranslatorVariant::Duplicate(n, t) => {
+                let translation = self.translate_with(t, value);
+                let render = translation
+                    .0
+                    .as_ref()
+                    .map(|(v, _, p)| (v.clone(), WaveStyle::Inherit(0), *p));
+                Translation(render, vec![(n.clone(), translation)])
+            }
             TranslatorVariant::Styled(s, t) => {
                 let translation = self.translate_with(t, value);
                 match translation {

@@ -1,16 +1,17 @@
 /*
 
 Module for replacing style variables with actual styles as defined in config files.
+Note that most code for reading the style variable configuration files is located
+in `config.rs`.
 
 */
 
-
-use crate::data::*;
 use crate::config::*;
+use crate::data::*;
 use crate::state::*;
 
 impl WaveStyle {
-    /// Replace a style variable with actual wavestyles
+    /// Replace a style variable with actual wavestyles.
     fn replace_wavestyles(&mut self, conf: &mut Config) {
         if let WaveStyle::Var(..) = self {
             *self = conf.get_style(self);
@@ -19,7 +20,7 @@ impl WaveStyle {
 }
 
 impl Translation {
-    /// Replace style variables with actual wavestyles
+    /// Replace style variables with actual wavestyles.
     pub fn replace_wavestyles(&mut self, conf: &mut Config) {
         if let Some((_, s, _)) = self.0.as_mut() {
             s.replace_wavestyles(conf);
@@ -30,9 +31,8 @@ impl Translation {
     }
 }
 
-
 impl TranslatorVariant {
-    /// Replace style variables with actual wavestyles
+    /// Replace style variables with actual wavestyles.
     fn replace_wavestyles(&mut self, conf: &mut Config) {
         match self {
             TranslatorVariant::Ref(_) => {}
@@ -72,14 +72,14 @@ impl TranslatorVariant {
 }
 
 impl Translator {
-    /// Replace style variables with actual wavestyles
+    /// Replace style variables with actual wavestyles.
     pub fn replace_wavestyles(&mut self, conf: &mut Config) {
         self.trans.replace_wavestyles(conf);
     }
 }
 
 impl State {
-    /// Replace style variables with actual wavestyles
+    /// Replace style variables with actual wavestyles.
     pub fn replace_wavestyles(&mut self) {
         for translator in self.data.types.values_mut() {
             translator.replace_wavestyles(&mut self.config);

@@ -13,8 +13,7 @@ use extism_pdk::{error, info, warn};
 use surfer_translation_types::WaveSource;
 pub use surfer_translation_types::plugin_types::TranslateParams;
 use surfer_translation_types::{
-    TranslationPreference, TranslationResult,
-    VariableInfo, VariableMeta as VMeta, VariableValue,
+    TranslationPreference, TranslationResult, VariableInfo, VariableMeta as VMeta, VariableValue,
 };
 
 use lazy_static::lazy_static;
@@ -24,10 +23,9 @@ use toml::Table;
 
 use camino::Utf8PathBuf;
 
-use crate::data::*;
 use crate::config::*;
+use crate::data::*;
 use crate::state::*;
-
 
 type VariableMeta = VMeta<(), ()>;
 
@@ -37,6 +35,7 @@ fn signal_name(signal: &VariableMeta) -> String {
 }
 
 lazy_static! {
+    /// The global state of the translator.
     pub static ref STATE: Mutex<State> = Mutex::new(State::new());
 }
 
@@ -126,7 +125,7 @@ pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<
         .map(|ws| ws.replace("\\", "/"));
 
     let (data, conf, wavesource_dir) = if let Some(source_file) = source_file {
-        // if there is a proper file path, try to find the metadata file locally,
+        // If there is a proper file path, try to find the metadata file locally,
         // as well as a local config file.
 
         // META:
@@ -157,12 +156,14 @@ pub fn set_wave_source(Json(wave_source): Json<Option<WaveSource>>) -> FnResult<
     state.config.wavesource_dir = wavesource_dir;
     state
         .config
-        .set_local_conf(conf.unwrap_or_else(Configuration::default)); //change conf first, as this updates the styles too
+        .set_local_conf(conf.unwrap_or_else(Configuration::default));
     state.set_data(data.unwrap_or_else(Data::new));
+    state.replace_wavestyles();
 
     Ok(())
 }
 
+/// Read a file (i.e. for configuration).
 fn try_read_file(file: String) -> Option<Vec<u8>> {
     if let Ok(true) = unsafe { file_exists(file.clone()) } {
         let bytes = unsafe { read_file(file.clone()) };
@@ -179,6 +180,7 @@ fn try_read_file(file: String) -> Option<Vec<u8>> {
     }
 }
 
+/// Read and parse a configuration file.
 fn read_conf_file(file: String) -> Option<Configuration> {
     try_read_file(file).and_then(|bytes| match toml::from_slice(&bytes) {
         Ok(conf) => {
@@ -192,6 +194,7 @@ fn read_conf_file(file: String) -> Option<Configuration> {
     })
 }
 
+/// Read and parse the metadata JSON file.
 pub fn read_meta_file(file: String) -> Option<Data> {
     try_read_file(file).and_then(|bytes| match serde_json::from_slice(&bytes) {
         Ok(data) => {
@@ -205,6 +208,7 @@ pub fn read_meta_file(file: String) -> Option<Data> {
     })
 }
 
+/// Read and parse a style variables configuration file.
 pub fn read_style_file(file: String) -> Option<Table> {
     try_read_file(file).and_then(|bytes| match toml::from_slice::<Table>(&bytes) {
         Ok(style) => {

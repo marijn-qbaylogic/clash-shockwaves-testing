@@ -4,8 +4,8 @@ All types for VCD Metadata (translators, signals, and LUTs)
 
 */
 
-use serde::{Deserialize, Serialize};
 use egui::Color32;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type SigMap = HashMap<String, String>;
@@ -14,7 +14,10 @@ pub type LutMap = HashMap<String, Lut>;
 
 pub type Lut = HashMap<String, Translation>;
 
-
+/// Object containing all metadata for translating binary VCD values:
+/// - the type of each signal
+/// - the translator of each type
+/// - any LUTs needed for translation
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Data {
     pub signals: SigMap,
@@ -22,12 +25,15 @@ pub struct Data {
     pub luts: LutMap,
 }
 
+/// The complete translation, including any subsignals, of a binary value.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Translation(pub Render, pub Vec<(String, Translation)>);
 
+/// The visual representation of the value on a single waveform line.
 pub type Render = Option<(Value, WaveStyle, Prec)>;
 pub type Value = String;
 
+/// The style (which determine the color of the waveform).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum WaveStyle {
     #[serde(alias = "D")]
@@ -63,6 +69,7 @@ pub type Prec = i16;
 /// Precedence of an atomic (a number, an identifier, somthing between parentheses)
 pub const ATOMIC: Prec = 11;
 
+/// A construct for turning binary values into translations.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Translator {
     #[serde(alias = "w")]
@@ -72,6 +79,7 @@ pub struct Translator {
     pub trans: TranslatorVariant,
 }
 
+/// The different types of translators
 #[derive(Serialize, Deserialize, Debug)]
 pub enum TranslatorVariant {
     #[serde(alias = "R")]
@@ -167,6 +175,7 @@ pub enum TranslatorVariant {
     },
 }
 
+/// A part of a value (for `AdvancedProduct`).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ValuePart {
     #[serde(alias = "L")]
@@ -175,6 +184,7 @@ pub enum ValuePart {
     Ref(usize, Prec),
 }
 
+/// A transformation on a binary value (for `ChangeBits`).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum BitPart {
     #[serde(alias = "C")]
@@ -185,6 +195,7 @@ pub enum BitPart {
     Slice((usize, usize)),
 }
 
+/// A number format (integers only).
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum NumberFormat {
     #[serde(alias = "S")]
@@ -199,11 +210,11 @@ pub enum NumberFormat {
     Bin,
 }
 
+/// What spacer, if any, to use, to make large numbers more legible.
 pub type NumberSpacer = Option<(u32, String)>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Structure(pub Vec<(String, Structure)>);
-
 
 impl Data {
     pub fn new() -> Self {

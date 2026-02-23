@@ -1,3 +1,13 @@
+/*
+
+Module for handling configuration options.
+
+There is one `Config` object that keeps score of all configurations.
+The system looks for a global and local config file, which get parsed into
+`Configuration` objects.
+
+*/
+
 use either::Either;
 use either::Either::*;
 use extism_pdk::{error, info, warn};
@@ -12,6 +22,8 @@ use std::collections::HashMap;
 use crate::data::*;
 use crate::plugin::*;
 
+/// The main configuration object, which includes local and global configurations,
+/// the directories for style files, and the combined style variable map.
 #[derive(Debug, Default)]
 pub struct Config {
     pub global: Configuration,
@@ -23,6 +35,9 @@ pub struct Config {
     pub style: StyleMap,
 }
 
+type StyleMap = HashMap<String, Either<Option<WaveStyle>, toml::Value>>;
+
+/// A single configuration file
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Configuration {
     #[serde(default)]
@@ -45,14 +60,13 @@ pub struct Configuration {
     pub style: Option<Table>,
 }
 
-type StyleMap = HashMap<String, Either<Option<WaveStyle>, toml::Value>>;
-
-
 impl Config {
+    /// Set the global configuration options.
     pub fn set_global_conf(&mut self, conf: Configuration) {
         self.global = conf;
         self.read_styles();
     }
+    /// Set the local configuration options.
     pub fn set_local_conf(&mut self, conf: Configuration) {
         self.local = conf;
         self.read_styles();
@@ -61,12 +75,15 @@ impl Config {
     fn read_styles(&mut self) {
         info!("SHOCKWAVES: Reapplying styles");
         self.style.clear();
+        // apply style variables directly specified in the config file first
         if let Some(s) = self.global.style.clone() {
             self.apply_styles(s);
         }
+        // and only then read the files listed
         for sfile in self.global.styles.clone() {
             self.read_style(sfile);
         }
+        // then do the same for local files
         if let Some(s) = self.local.style.clone() {
             self.apply_styles(s);
         }
@@ -82,8 +99,7 @@ impl Config {
         }
 
         let file = if path.starts_with("./") {
-            //use local file - store VCD path in config
-            //info!("path relative to waveform dir {:?}",self.wavesource_dir);
+            // Use local file
             self.wavesource_dir
                 .as_ref()
                 .map(|dir| dir.join(&path).into_string())
@@ -108,12 +124,14 @@ impl Config {
         }
     }
 
+    /// Update the style table with the styles from a style config table.
     fn apply_styles(&mut self, styles: Table) {
         for (key, value) in styles.into_iter() {
-            self.style.insert(key, Right(value));
+            self.style.insert(key, Right(value)); //Right means "not yet evaluated"
         }
     }
 
+    /// Parse a wavestyle in the context of the style variables table.
     pub fn get_style(&mut self, ws: &WaveStyle) -> WaveStyle {
         match ws {
             WaveStyle::Var(v, def) => self.get_style_var(v).unwrap_or_else(|| self.get_style(def)),
@@ -121,6 +139,8 @@ impl Config {
         }
     }
 
+    /// Evaluate a style variable. Styles are evaluated lazily, i.e. when they first
+    /// get used.
     fn get_style_var(&mut self, var: &str) -> Option<WaveStyle> {
         match self.style.get(var) {
             Some(Left(ws)) => ws.clone(),
@@ -135,6 +155,8 @@ impl Config {
             }
         }
     }
+
+    /// Parse a TOML value in a config file into a wavestyle.
     fn get_style_toml(&mut self, val: TVal) -> Option<WaveStyle> {
         match val {
             TVal::String(s) => self.get_style_string(&s),
@@ -145,11 +167,14 @@ impl Config {
             }
         }
     }
+
+    /// Get a style from a string representation
+    #[rustfmt::skip]
     fn get_style_string(&mut self, ws: &str) -> Option<WaveStyle> {
         Some(match ws {
             ws if ws == "DEFAULT" || ws == "D" => WaveStyle::Default,
-            ws if ws == "ERROR" || ws == "E" => WaveStyle::Error,
-            ws if ws == "HIDDEN" || ws == "H" => WaveStyle::Hidden,
+            ws if ws == "ERROR"   || ws == "E" => WaveStyle::Error,
+            ws if ws == "HIDDEN"  || ws == "H" => WaveStyle::Hidden,
             ws if ws == "INHERIT" || ws == "I" => WaveStyle::Inherit(0),
             ws if ws.starts_with("I ") => match ws[2..].parse::<u32>() {
                 Ok(n) => WaveStyle::Inherit(n as usize),
@@ -159,11 +184,11 @@ impl Config {
                 }
             },
 
-            ws if ws == "NORMAL" || ws == "N" => WaveStyle::Normal,
-            ws if ws == "WARN" || ws == "W" => WaveStyle::Warn,
-            ws if ws == "UNDEF" || ws == "U" => WaveStyle::Undef,
-            ws if ws == "HIGHIMP" || ws == "Z" => WaveStyle::HighImp,
-            ws if ws == "WEAK" || ws == "Q" => WaveStyle::Weak,
+            ws if ws == "NORMAL"   || ws == "N" => WaveStyle::Normal,
+            ws if ws == "WARN"     || ws == "W" => WaveStyle::Warn,
+            ws if ws == "UNDEF"    || ws == "U" => WaveStyle::Undef,
+            ws if ws == "HIGHIMP"  || ws == "Z" => WaveStyle::HighImp,
+            ws if ws == "WEAK"     || ws == "Q" => WaveStyle::Weak,
             ws if ws == "DONTCARE" || ws == "X" => WaveStyle::DontCare,
 
             hex if hex.starts_with("#") => match Color32::from_hex(hex) {
@@ -181,12 +206,14 @@ impl Config {
         })
     }
 
+    /// Return whether propagation of the `Error` style is turned on (defaults to true).
     pub fn do_prop_errors(&self) -> bool {
         self.local
             .propagate_errors
             .unwrap_or(self.global.propagate_errors.unwrap_or(true))
     }
 
+    /// Get the spacer override settings for a number format.
     pub fn get_spacer_override(&self, f: &NumberFormat) -> Option<&NumberSpacer> {
         match f {
             NumberFormat::Bin => self

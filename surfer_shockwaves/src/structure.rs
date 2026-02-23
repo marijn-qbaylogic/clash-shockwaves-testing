@@ -1,10 +1,16 @@
+/*
+
+Module for handling signal structures.
+
+*/
+
 use surfer_translation_types::VariableInfo;
 
-use crate::state::*;
 use crate::data::*;
+use crate::state::*;
 
 impl Structure {
-    /// Generate a structure from a translation
+    /// Generate a structure from a translation.
     fn from_trans(trans: &Translation) -> Self {
         Structure(
             trans
@@ -17,13 +23,13 @@ impl Structure {
 }
 
 impl Data {
-    /// Get the structure of a type
+    /// Get the structure of a type.
     pub fn type_structure(&self, ty: &str) -> Structure {
         let trans = self.get_translator(ty);
         self.trans_structure(trans)
     }
 
-    /// Get the structure of a translator
+    /// Get the structure of a translator.
     pub fn trans_structure(&self, trans: &Translator) -> Structure {
         let Translator { trans, .. } = trans;
         match trans {
@@ -81,7 +87,7 @@ impl Data {
 }
 
 impl State {
-    /// Determine the full structure of a signal.
+    /// Determine the structure of a signal.
     pub fn structure(&mut self, signal: &str) -> VariableInfo {
         // lookup signal type
         let ty = self.data.get_type(signal).unwrap();
@@ -91,15 +97,13 @@ impl State {
             return st.convert();
         }
 
-        // lookup type translator
+        // determine and store the structure
         let trans = self.data.get_translator(ty);
         let st = self.data.trans_structure(trans);
         let ty = ty.clone();
 
-        // create non-flattened structure for type
         let st = self.cache.structures.entry(ty).or_insert(st);
 
-        // convert to VariableInfo
         st.convert()
     }
 }
