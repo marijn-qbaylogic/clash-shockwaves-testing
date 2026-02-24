@@ -79,7 +79,7 @@ impl Config {
         if let Some(s) = self.global.style.clone() {
             self.apply_styles(s);
         }
-        // and only then read the files listed
+        // and only THEN read the files listed
         for sfile in self.global.styles.clone() {
             self.read_style(sfile);
         }
@@ -105,7 +105,7 @@ impl Config {
                 .map(|dir| dir.join(&path).into_string())
         } else if path.is_absolute() || path.to_string().chars().nth(1) == Some(':') {
             // C-style disk (HACK!)
-            //use absolute path
+            // -> use absolute path
             Some(path.to_string())
         } else {
             //use path relative to config dir

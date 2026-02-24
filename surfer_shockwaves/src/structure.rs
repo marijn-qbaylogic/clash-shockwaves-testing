@@ -33,7 +33,34 @@ impl Data {
     pub fn trans_structure(&self, trans: &Translator) -> Structure {
         let Translator { trans, .. } = trans;
         match trans {
+            /* Direct translators */
             TranslatorVariant::Ref(ty) => self.type_structure(ty),
+            TranslatorVariant::Const(t) => Structure::from_trans(t),
+            TranslatorVariant::Lut(_, structure) => structure.clone(),
+            TranslatorVariant::Number { .. } => Structure(vec![]),
+            /* Product translators */
+            TranslatorVariant::Product { subs, .. } => Structure(
+                subs.iter()
+                    .map(|(name, t)| (name.clone(), self.trans_structure(t)))
+                    .collect(),
+            ),
+            TranslatorVariant::AdvancedProduct {
+                slice_translators,
+                hierarchy,
+                ..
+            } => Structure(
+                hierarchy
+                    .iter()
+                    .map(|(n, i)| (n.clone(), self.trans_structure(&slice_translators[*i].1)))
+                    .collect(),
+            ),
+            TranslatorVariant::Array { sub, len, .. } => Structure(
+                std::iter::repeat_n(self.trans_structure(sub), *len as usize)
+                    .enumerate()
+                    .map(|(i, s)| (i.to_string(), s))
+                    .collect(),
+            ),
+            /* Sum translators */
             TranslatorVariant::Sum(translators) => {
                 let ts = translators
                     .iter()
@@ -53,30 +80,7 @@ impl Data {
                 ts.extend(self.trans_structure(default_translator).0);
                 Structure(ts)
             }
-            TranslatorVariant::Product { subs, .. } => Structure(
-                subs.iter()
-                    .map(|(name, t)| (name.clone(), self.trans_structure(t)))
-                    .collect(),
-            ),
-            TranslatorVariant::AdvancedProduct {
-                slice_translators,
-                hierarchy,
-                ..
-            } => Structure(
-                hierarchy
-                    .iter()
-                    .map(|(n, i)| (n.clone(), self.trans_structure(&slice_translators[*i].1)))
-                    .collect(),
-            ),
-            TranslatorVariant::Const(t) => Structure::from_trans(t),
-            TranslatorVariant::Lut(_, structure) => structure.clone(),
-            TranslatorVariant::Number { .. } => Structure(vec![]),
-            TranslatorVariant::Array { sub, len, .. } => Structure(
-                std::iter::repeat_n(self.trans_structure(sub), *len as usize)
-                    .enumerate()
-                    .map(|(i, s)| (i.to_string(), s))
-                    .collect(),
-            ),
+            /* Manipulating translators */
             TranslatorVariant::Styled(_, translator) => self.trans_structure(translator),
             TranslatorVariant::Duplicate(name, translator) => {
                 Structure(vec![(name.clone(), self.trans_structure(translator))])
@@ -89,7 +93,6 @@ impl Data {
 impl State {
     /// Determine the structure of a signal.
     pub fn structure(&mut self, signal: &str) -> VariableInfo {
-        // lookup signal type
         let ty = self.data.get_type(signal).unwrap();
 
         // try to return structure from cache

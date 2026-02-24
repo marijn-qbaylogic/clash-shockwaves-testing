@@ -51,8 +51,6 @@ lazy_static! {
 pub fn new() -> FnResult<()> {
     info!("SHOCKWAVES: Created plugin");
 
-    // rewrite: set conf dir, read global conf.
-
     let dir = unsafe { translators_config_dir(()) };
     if let Ok(Json(Some(dir))) = dir {
         let dir = Utf8PathBuf::from(&dir);
@@ -111,7 +109,7 @@ pub fn translate(
         VariableValue::BigUint(v) => format!(
             "{v:0width$b}",
             width = &(variable.num_bits.unwrap_or(0) as usize)
-        ), // pad to the right length how?
+        ),
         VariableValue::String(v) => v.clone(),
     };
     let signal = signal_name(&variable);
