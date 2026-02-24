@@ -1,53 +1,52 @@
-{-|
-Copyright  :  (C) 2018, Google Inc.
-                  2019, Myrtle Software Ltd
-                  2022-2026, QBayLogic B.V.
-License    :  BSD2 (see the file LICENSE)
-Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
-
-Utilities for tracing signals and dumping them in various ways. Example usage:
-
-@
-import Clash.Prelude hiding (writeFile)
-import Data.Text.IO  (writeFile)
-import Clash.Shockwaves
-import qualified Clash.Shockwaves.Trace as T
-
--- | Count and wrap around
-subCounter :: SystemClockResetEnable => Signal System (Index 3)
-subCounter = T.traceSignal1 "sub" counter
-  where
-    counter =
-      register 0 (fmap succ' counter)
-
-    succ' c
-      | c == maxBound = 0
-      | otherwise     = c + 1
-
--- | Count, but only when my subcounter is wrapping around
-mainCounter :: SystemClockResetEnable => Signal System (Signed 64)
-mainCounter = T.traceSignal1 "main" counter
-  where
-    counter =
-      register 0 (fmap succ' $ bundle (subCounter,counter))
-
-    succ' (sc, c)
-      | sc == maxBound = c + 1
-      | otherwise      = c
-
--- | Collect traces, and dump them to a VCD file.
-main :: IO ()
-main = do
-  let cntrOut = exposeClockResetEnable mainCounter systemClockGen systemResetGen enableGen
-  vcd <- T.dumpVCD (0, 100) cntrOut ["main", "sub"]
-  case vcd of
-    Left msg ->
-      error msg
-    Right (contents,meta) -> do
-      writeFile     "mainCounter.vcd"  contents
-      writeFileJSON "mainCounter.json" meta
-@
--}
+-- |
+-- Copyright  :  (C) 2018, Google Inc.
+--                   2019, Myrtle Software Ltd
+--                   2022-2026, QBayLogic B.V.
+-- License    :  BSD2 (see the file LICENSE)
+-- Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+--
+-- Utilities for tracing signals and dumping them in various ways. Example usage:
+--
+-- @
+-- import Clash.Prelude hiding (writeFile)
+-- import Data.Text.IO  (writeFile)
+-- import Clash.Shockwaves
+-- import qualified Clash.Shockwaves.Trace as T
+--
+-- -- | Count and wrap around
+-- subCounter :: SystemClockResetEnable => Signal System (Index 3)
+-- subCounter = T.traceSignal1 "sub" counter
+--   where
+--     counter =
+--       register 0 (fmap succ' counter)
+--
+--     succ' c
+--       | c == maxBound = 0
+--       | otherwise     = c + 1
+--
+-- -- | Count, but only when my subcounter is wrapping around
+-- mainCounter :: SystemClockResetEnable => Signal System (Signed 64)
+-- mainCounter = T.traceSignal1 "main" counter
+--   where
+--     counter =
+--       register 0 (fmap succ' $ bundle (subCounter,counter))
+--
+--     succ' (sc, c)
+--       | sc == maxBound = c + 1
+--       | otherwise      = c
+--
+-- -- | Collect traces, and dump them to a VCD file.
+-- main :: IO ()
+-- main = do
+--   let cntrOut = exposeClockResetEnable mainCounter systemClockGen systemResetGen enableGen
+--   vcd <- T.dumpVCD (0, 100) cntrOut ["main", "sub"]
+--   case vcd of
+--     Left msg ->
+--       error msg
+--     Right (contents,meta) -> do
+--       writeFile     "mainCounter.vcd"  contents
+--       writeFileJSON "mainCounter.json" meta
+-- @
 
 {- FOURMOLU_DISABLE -}
 

@@ -1,4 +1,4 @@
-{-|
+{- |
 Copyright  :  (C) 2025-2026, QBayLogic B.V.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
@@ -6,39 +6,46 @@ Module      : Clash.Shockwaves.LUT
 Description : Shockwaves tools for LUTs
 
 Everything needed to create 'Waveform' instances that use lookup tables.
-
 -}
-
 module Clash.Shockwaves.LUT (
   -- * WaveformLUT
-  WaveformLUT(structureL,translateL),
+  WaveformLUT (structureL, translateL),
   translateWith,
-  renderWith, renderShow,
-  translateAtomWith, translateAtomShow,
-  translateAtomSigWith, translateAtomSigShow,
-  noSplit, splitL,
+  renderWith,
+  renderShow,
+  translateAtomWith,
+  translateAtomShow,
+  translateAtomSigWith,
+  translateAtomSigShow,
+  noSplit,
+  splitL,
   precL,
-  WaveformForLUT(..),
+  WaveformForLUT (..),
   tLut,
 
   -- * Utility
-  tFromVal, rFromVal,
-  safeWHNF, safeVal, safeValOr,
+  tFromVal,
+  rFromVal,
+  safeWHNF,
+  safeVal,
+  safeValOr,
   safeTranslation,
-  errorT, errorR,
+  errorT,
+  errorR,
 
   -- * Standard Shockwaves types and functions
   Waveform,
-  Translation(..),
+  Translation (..),
   Value,
-  WaveStyle(..),
+  WaveStyle (..),
   Prec,
-  Structure(..),
+  Structure (..),
   SubSignal,
-  structure,structureT,
+  structure,
+  structureT,
 ) where
 
-import Clash.Shockwaves.Internal.Types
-import Clash.Shockwaves.Internal.Waveform
 import Clash.Shockwaves.Internal.Translator
+import Clash.Shockwaves.Internal.Types
 import Clash.Shockwaves.Internal.Util
+import Clash.Shockwaves.Internal.Waveform

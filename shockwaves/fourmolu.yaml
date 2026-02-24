@@ -1,9 +1,12 @@
 # For more information, see: https://fourmolu.github.io/config/
 indentation: 2
 column-limit: 90
-function-arrows: leading
+# function-arrows: leading
 indent-wheres: true
 haddock-style: single-line
+haddock-style-module: multi-line
 in-style: left-align
 if-style: hanging
 single-deriving-parens: auto
+
+

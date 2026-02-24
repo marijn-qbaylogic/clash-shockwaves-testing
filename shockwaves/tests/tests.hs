@@ -1,8 +1,7 @@
-
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 import Prelude
 
@@ -11,12 +10,14 @@ import Test.Tasty.HUnit
 
 import Clash.Shockwaves.Internal.Types
 import Clash.Shockwaves.Internal.Util
+
 -- import Clash.Shockwaves.Internal.Translator
-import Clash.Shockwaves.Internal.Waveform
+
 import Clash.Prelude
+import Clash.Shockwaves.Internal.Waveform
+import Data.Bifunctor (second)
 import qualified Data.List as L
 import qualified Data.Map as M
-import Data.Bifunctor (second)
 import Data.Maybe (fromMaybe)
 
 import Tests.Structure
@@ -36,7 +37,6 @@ main = defaultMain tests
 
 -}
 
-
 isR :: Either String () -> Assertion
 isR x = case x of
   Right () -> return ()
@@ -48,7 +48,8 @@ isL x = case x of
   Right () -> assertFailure "passed, but should have failed"
 
 tests :: TestTree
-tests = testGroup "Tests" [testStructureTest,structureTest,renderTest,translationTest,lutTest]
+tests =
+  testGroup "Tests" [testStructureTest, structureTest, renderTest, translationTest, lutTest]
 
 undef :: a
 undef = Clash.Prelude.undefined
@@ -94,18 +95,13 @@ testStructureTest = testGroup "TEST testStructure FUNCTION"
   ]
 {- FOURMOLU_ENABLE -}
 
-
-
-
-
-
-
-testAll :: ShowX a => (a -> Assertion) -> [a] -> [TestTree]
+testAll :: (ShowX a) => (a -> Assertion) -> [a] -> [TestTree]
 testAll f = L.map go
-  where go x = testCase (showX x) (f x)
+  where
+    go x = testCase (showX x) (f x)
 
-testS :: Waveform a => a -> Assertion
-testS (x::a) = isR $ testStructure (structure @a) $ translate x
+testS :: (Waveform a) => a -> Assertion
+testS (x :: a) = isR $ testStructure (structure @a) $ translate x
 
 {- FOURMOLU_DISABLE -}
 {-
@@ -176,7 +172,7 @@ renderTest = testGroup "RENDERED STRING IS CORRECT"
   , testGroup "Maybe" $ renders [ Nothing , Just True , undef     ]
                                 ["Nothing","Just True","undefined"]
   , testGroup "Vec 2" $ renders [ True :> False :> Nil , undef     :> undef     :> Nil , True :> undef            , undef                         ]
-                                ["True :> False :> Nil","undefined :> undefined :> Nil","True :> undefined :> Nil","undefined :> undefined :> Nil"] -- True:>undefined being broken has been fixed in Clash and will start working automatically soon
+                                ["True :> False :> Nil","undefined :> undefined :> Nil","True :> undefined :> Nil","undefined :> undefined :> Nil"] -- True:>undefined being broken has been fixed in Clash (1.8.5) and will start working automatically soon
   , testGroup "Vec 0" $ renders [ Nil @Bool, undef]
                                 ["Nil"     ,"Nil" ]
   , testGroup "Maybe L" $ renders [ Just (La False False)  ,  Just undef     , undef     ]
@@ -192,32 +188,24 @@ renderTest = testGroup "RENDERED STRING IS CORRECT"
   ]
 {- FOURMOLU_ENABLE -}
 
+data T = T (String, WaveStyle) [(String, T)] deriving (Show)
 
-
-
-
-
-
-
-
-data T = T (String,WaveStyle) [(String,T)] deriving (Show)
-
-pattern (:@) :: a -> b -> (a,b)
-pattern (:@) x y <- (x,y)
+pattern (:@) :: a -> b -> (a, b)
+pattern (:@) x y <- (x, y)
 
 toT :: Translation -> T
 toT (Translation ren subs) = T d $ L.map (second toT) subs
-  where d = case ren of
-          Just (v,s,_) -> (v,s)
-          Nothing -> ("",WSNormal)
-
+  where
+    d = case ren of
+      Just (v, s, _) -> (v, s)
+      Nothing -> ("", WSNormal)
 
 pat :: (T -> Int) -> T -> Assertion
 pat f v = case safeVal (f v) of
   Right _ -> return ()
   Left e -> assertFailure $ show v <> ": " <> fromMaybe "error" e
 
-pats :: (Waveform a, ShowX a) => [(a,T->Int)] -> [TestTree]
+pats :: (Waveform a, ShowX a) => [(a, T -> Int)] -> [TestTree]
 pats = L.map (uncurry go)
   where
     go :: (Waveform a, ShowX a) => a -> (T -> Int) -> TestTree
@@ -236,36 +224,36 @@ to test if the translation is as expected.
 translationTest :: TestTree
 translationTest = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
   [ testGroup "S"  $ pats
-    [ (S                            , \( T _ []                                                                 )->0)
-    , (undef                        , \( T _ []                                                                 )->0) ]
+    [ (S                            , \( T _ []                                                                       )->0)
+    , (undef                        , \( T _ []                                                                       )->0) ]
   , testGroup "M"  $ pats
-    [ (Ma                           , \( T _ ["Ma":@T ("Ma",_) []]                                              )->0)
-    , (Mb                           , \( T _ ["Mb":@T _        []]                                              )->0)
-    , (undef                        , \( T _ []                                                                 )->0) ]
+    [ (Ma                           , \( T _ ["Ma":@T ("Ma",_) []]                                                    )->0)
+    , (Mb                           , \( T _ ["Mb":@T _        []]                                                    )->0)
+    , (undef                        , \( T _ []                                                                       )->0) ]
   , testGroup "F"  $ pats
-    [ (M True 3                     , \( T _ ["0":@T _ [],"1":@T _ []]                                          )->0)
-    , (undef                        , \( T _ ["0":@T _ [],"1":@T _ []]                                          )->0) ]
+    [ (M True 3                     , \( T _ ["0":@T _ [],"1":@T _ []]                                                )->0)
+    , (undef                        , \( T _ ["0":@T _ [],"1":@T _ []]                                                )->0) ]
   , testGroup "Op" $ pats
-    [ (True ://: (False ://: False) , \( T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]]                     )->0)
-    , (undef                        , \( T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]]                     )->0) ]
+    [ (True ://: (False ://: False) , \( T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]]                           )->0)
+    , (undef                        , \( T _ ["0":@T _ _,"1":@T _ ["0":@T _ _, "1":@T _ _]]                           )->0) ]
   , testGroup "St" $ pats
-    [ (St{b=3,a=False}              , \( T _ ["a":@T _ [],"b":@T _ []]                                          )->0)
-    , (undef                        , \( T _ ["a":@T _ [],"b":@T _ []]                                          )->0) ]
+    [ (St{b=3,a=False}              , \( T _ ["a":@T _ [],"b":@T _ []]                                                )->0)
+    , (undef                        , \( T _ ["a":@T _ [],"b":@T _ []]                                                )->0) ]
   , testGroup "C"  $ pats
-    [ (Red                          , \( T ("Red"  ,WSInherit 0) ["Red"  :@T ("Red"  ,WSVar "red"   "red" ) []] )->0)
-    , (Green                        , \( T ("Green",WSInherit 0) ["Green":@T ("Green",WSVar "green" "lime") []] )->0) ]
+    [ (Red                          , \( T ("Red"  ,WSInherit 0) ["Red"  :@T ("Red"  ,WSVar "red"   "red" ) []]       )->0)
+    , (Green                        , \( T ("Green",WSInherit 0) ["Green":@T ("Green",WSVar "green" "lime") []]       )->0) ]
   , testGroup "L"  $ pats
-    [ (La True False                , \( T (_,"red") ["La":@T (_,"red") ["0":@ _,"1":@ _]]                      )->0)
-    , (undef                        , \( T _         []                                                         )->0) ]
+    [ (La True False                , \( T (_,"red") ["La":@T (_,"red") ["0":@ _,"1":@ _]]                            )->0)
+    , (undef                        , \( T _         []                                                               )->0) ]
   , testGroup "Maybe" $ pats
-    [ (Nothing                      , \( T _ []                                                                 )->0)
-    , (Just True                    , \( T _ ["Just.0":@ _]                                                     )->0)
-    , (undef                        , \( T _ []                                                                 )->0) ]
+    [ (Nothing                      , \( T _ []                                                                       )->0)
+    , (Just True                    , \( T _ ["Just.0":@ _]                                                           )->0)
+    , (undef                        , \( T _ []                                                                       )->0) ]
   , testGroup "Vec 2" $ pats
-    [ (True  :> False :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
-    , (undef :> undef :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
-    , (True  :> undef               , \( T _ ["0":@ _,"1":@ _]                                                  )->0)
-    , (undef                        , \( T _ ["0":@ _,"1":@ _]                                                  )->0) ]
+    [ (True  :> False :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                        )->0)
+    , (undef :> undef :> Nil        , \( T _ ["0":@ _,"1":@ _]                                                        )->0)
+    , (True  :> undef               , \( T _ ["0":@ _,"1":@ _]                                                        )->0)
+    , (undef                        , \( T _ ["0":@ _,"1":@ _]                                                        )->0) ]
   , testGroup "NumRep U3" $ pats
     [ (NumRep (1::Unsigned 3)       , \( T _ ["bin":@ _,"oct":@ _, "hex":@ _, "unsigned":@ _, "signed":@ _,"odd":@ _] )->0)]
   ]

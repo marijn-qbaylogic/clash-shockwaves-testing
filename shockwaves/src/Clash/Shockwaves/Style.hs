@@ -1,4 +1,4 @@
-{-|
+{- |
 Copyright  :  (C) 2025-2026, QBayLogic B.V.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
@@ -11,7 +11,7 @@ Waveforms can be styled in a number of ways. Various standard styles are provide
 in 'WaveformStyle'. It is also possible to use custom colors using 'WSColor'.
 These values can be provided in 3 typical ways:
 
-- Directly from an @RGB Word8@ value, using the 'WSColor' constructor: 
+- Directly from an @RGB Word8@ value, using the 'WSColor' constructor:
   @WSColor (RGB 128 128 0)@.
 - From a @Colour Double@ value, using the function 'wsColor'.
   Many such values are provided in "Clash.Shockwaves.Style.Colors".
@@ -37,22 +37,20 @@ instance Waveform Col where
            , "#ffff00"             -- hexadecimal color
            , "$cyan"               -- style variable
 @
-
-
 -}
-
 module Clash.Shockwaves.Style (
-  WaveStyle(..),
+  WaveStyle (..),
   Color,
-  RGB(..),
+  RGB (..),
   wsColor,
   Word8,
 ) where
+
 import Clash.Prelude
-import Clash.Shockwaves.Internal.Types (WaveStyle(..),Color)
-import Data.Colour.SRGB (RGB(..), toSRGB24)
-import Data.Word (Word8)
+import Clash.Shockwaves.Internal.Types (Color, WaveStyle (..))
 import Data.Colour (Colour)
+import Data.Colour.SRGB (RGB (..), toSRGB24)
+import Data.Word (Word8)
 
 -- | Create a colored 'WaveStyle' from a color value defined in 'Double's.
 --   This is the type of the predefined default colors in "Data.Colour".
