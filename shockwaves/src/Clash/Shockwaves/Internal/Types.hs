@@ -123,7 +123,7 @@ data TypeRef = TypeRef
   , translatorRef :: Translator -- ^ The translator used for the type.
   }
 
-
+{- FOURMOLU_DISABLE -}
 -- | The translation algorithm used.
 -- Translator variants determine how the bits are interpreted, split, manipulated,
 -- and in the end, translatated and displayed in the waveform viewer.
@@ -156,8 +156,8 @@ data TranslatorVariant
   --
   -- **Important**: Slice indices start to the left, i.e. with the MSB!
   | TAdvancedSum
-    { index :: Slice -- ^ Slice of inputs to use
-    , defTrans :: Translator -- ^ Default translator
+    { index      :: Slice -- ^ Slice of inputs to use
+    , defTrans   :: Translator -- ^ Default translator
     , rangeTrans :: [(ISlice,Translator)] -- ^ Ranges of indices (half-open) and their translators
     }
 
@@ -219,11 +219,11 @@ data TranslatorVariant
   | TAdvancedProduct
     { sliceTrans :: [(Slice,Translator)]
       -- ^ A list of slices of the input, and translators to translate them with.
-    , hierarchy :: [(SubSignal,Int)]
+    , hierarchy  :: [(SubSignal,Int)]
       -- ^ A list of subsignals, and what index of @sliceTrans@ to use for their values.
     , valueParts :: [ValuePart]
       -- ^ A list of value literals and references to the values in @sliceTrans@.
-    , preco :: Prec
+    , preco      :: Prec
       -- ^ The precedence of the final value.
     }
 
@@ -255,8 +255,8 @@ data TranslatorVariant
 
   -- | A constant translation value. The binary value provided is completely ignored.
   | TConst Translation
-
   deriving (Show)
+{- FOURMOLU_ENABLE -}
 
 -- | Parts of the binary output of 'TChangeBits'.
 -- Each constructor modifies bits in a certain way.

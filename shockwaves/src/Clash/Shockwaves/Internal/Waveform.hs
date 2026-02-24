@@ -735,52 +735,6 @@ instance (KnownNat n, KnownSymbol s) => KnownNSpacer ('Just '(n, s)) where
 
 --------------------------------------- IMPLEMENTATIONS ----------------------------------
 
--- TUPLES
-{-
-# python script for generating tuple instances
-
-for i in range(2,12):
-	v = [f"a{j}" for j in range(i)]
-	c = ",".join("Waveform "+k for k in v)
-	vs = ",".join(v)
-	print(f"""instance ({c}) => Waveform ({vs}) where
-  translator = Translator (width @({vs})) $ TProduct{{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep ({vs}) ())}}
-""")
--}
-
--- instance (Waveform a0,Waveform a1) => Waveform (a0,a1) where
---   translator = Translator (width @(a0,a1)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2) => Waveform (a0,a1,a2) where
---   translator = Translator (width @(a0,a1,a2)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3) => Waveform (a0,a1,a2,a3) where
---   translator = Translator (width @(a0,a1,a2,a3)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4) => Waveform (a0,a1,a2,a3,a4) where
---   translator = Translator (width @(a0,a1,a2,a3,a4)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5) => Waveform (a0,a1,a2,a3,a4,a5) where
---   translator = Translator (width @(a0,a1,a2,a3,a4,a5)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6) => Waveform (a0,a1,a2,a3,a4,a5,a6) where
---   translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7) where
---   translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8) where
---   translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8,Waveform a9) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) where
---   translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9) ())}
-
--- instance (Waveform a0,Waveform a1,Waveform a2,Waveform a3,Waveform a4,Waveform a5,Waveform a6,Waveform a7,Waveform a8,Waveform a9,Waveform a10) => Waveform (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) where
---   translator = Translator (width @(a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)) $ TProduct{start="(",sep=",",stop=")",labels=[],preci= -1,preco=11,subs=enumLabel $ fieldTranslatorsG @(Rep (a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) ())}
-
-
--- INSTANCES FOR OTHER STANDARD HASKELL TYPES
-
 instance WaveformConst () where
   constRen = rFromVal "()"
 deriving via WaveformForConst () instance Waveform ()

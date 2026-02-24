@@ -53,6 +53,7 @@ tests = testGroup "Tests" [testStructureTest,structureTest,renderTest,translatio
 undef :: a
 undef = Clash.Prelude.undefined
 
+{- FOURMOLU_DISABLE -}
 {-
 
 Test format:
@@ -91,7 +92,7 @@ testStructureTest = testGroup "TEST testStructure FUNCTION"
     (Translation Nothing [ ("b",Translation Nothing [ ("ba",Translation Nothing [])
                                                     , ("bc",Translation Nothing [])])])
   ]
-
+{- FOURMOLU_ENABLE -}
 
 
 
@@ -106,6 +107,7 @@ testAll f = L.map go
 testS :: Waveform a => a -> Assertion
 testS (x::a) = isR $ testStructure (structure @a) $ translate x
 
+{- FOURMOLU_DISABLE -}
 {-
 
 For all listed values, ensure that the translation is a subset of the
@@ -128,7 +130,7 @@ structureTest = testGroup "TRANSLATION MATCHES TRANSLATOR STRUCTURE"
   , testGroup "Pointer" $ testAll testS [Pointer @32 0, Pointer 1, Pointer 2, Pointer undef, undef]
   , testGroup "NumRep" $ testAll testS $ NumRep <$> [0,1,3,4,7 :: Unsigned 3]
   ]
-
+{- FOURMOLU_eNABLE -}
 
 
 
@@ -145,6 +147,7 @@ renders xs = L.zipWith go rs'
     rs' = L.map (\x -> (showX x, getRen $ translate x)) xs
     go (n,x) y = testCase n $ x @?= y
 
+{- FOURMOLU_DISABLE -}
 {-
 
 Tests take the format
@@ -187,7 +190,7 @@ renderTest = testGroup "RENDERED STRING IS CORRECT"
   , testGroup "LittleEndian" $ renders (LittleEndian <$> [             0 ,             1 ,            16 ,           256 ,         65536 ])
                                                          ["0Xxe_00_00_00","0Xxe_01_00_00","0Xxe_10_00_00","0Xxe_00_01_00","0Xxe_00_00_01"]
   ]
-
+{- FOURMOLU_ENABLE -}
 
 
 
@@ -220,8 +223,8 @@ pats = L.map (uncurry go)
     go :: (Waveform a, ShowX a) => a -> (T -> Int) -> TestTree
     go x f = testCase (showX x) $ pat f $ toT $ translate x
 
+{- FOURMOLU_DISABLE -}
 {-
-
 Tests take the format
   `pats [(value,pattern)]`
 where a pattern is a lambda function that matches a specific input and returns 0:
@@ -229,7 +232,6 @@ where a pattern is a lambda function that matches a specific input and returns 0
 to test if the translation is as expected.
 
 `a :@ b` is equivalent to `(a,b)` and only exists to make the pattern more readable.
-
 -}
 translationTest :: TestTree
 translationTest = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
@@ -267,8 +269,9 @@ translationTest = testGroup "TRANSLATION STRUCTURE/STYLE IS CORRECT"
   , testGroup "NumRep U3" $ pats
     [ (NumRep (1::Unsigned 3)       , \( T _ ["bin":@ _,"oct":@ _, "hex":@ _, "unsigned":@ _, "signed":@ _,"odd":@ _] )->0)]
   ]
+{- FOURMOLU_ENABLE -}
 
-
+{- FOURMOLU_DISABLE -}
 {-
 Test whether the LUT table contains the expected values after
 calling `addValue`
@@ -281,12 +284,6 @@ lutTest = testGroup "LUT VALUES ARE STORED"
   , testCase "undefined @L"         $ apply (addValue (undef @L)           ) M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L    )])]
   , testCase "Just (undefined @L)"  $ apply (addValue (Just $ undef @L)    ) M.empty @?= M.fromList [(typeName @L,M.fromList [("xxx",translate $ undef @L    )])]
   , testCase "undefined @(Maybe L)" $ apply (addValue (undef @(Maybe L))   ) M.empty @?= M.empty
-  -- , testPrint "translator L" (translator @L)
-  -- , testPrint "addValue" $ addValue (La True True)
-  -- , testPrint "hasLut L" $ hasLut @L
   ]
   where apply fs m = L.foldl (flip ($)) m fs
-        -- testPrint n s = testCaseInfo n (pure $ show s)
-
--- instance Show (LUTMap -> LUTMap) where
---   show _ = "*"
+{- FOURMOLU_ENABLE -}

@@ -12,8 +12,7 @@ import           Control.Monad (replicateM)
 
 
 
-deriveWaveformTuples
-  :: Int -> Int -> DecsQ
+deriveWaveformTuples :: Int -> Int -> DecsQ
 deriveWaveformTuples minSize maxSize = do
   let waveform  = ConT $ mkName "Waveform"
       -- waveformG = ConT $ mkName "WaveformG"

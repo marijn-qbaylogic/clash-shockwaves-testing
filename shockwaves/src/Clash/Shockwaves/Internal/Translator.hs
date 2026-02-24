@@ -77,31 +77,33 @@ getVal t = case t of
 filterSignals :: [(SubSignal,Translation)] -> [(SubSignal,Translation)]
 filterSignals = L.filter ((/="") . fst)
 
-
+{- FOURMOLU_DISABLE -}
 -- | Change bits using 'BitPart'.
 changeBits :: BitPart -> BitList -> BitList
 changeBits (BPConcat bps) bin = L.foldl (<>) "" $ L.map (`changeBits` bin) bps
-changeBits (BPLit bl)    _bin = bl
+changeBits (BPLit bl)     _   = bl
 changeBits (BPSlice s)    bin = BL.slice s bin
+{- FOURMOLU_ENABLE -}
 
 
-
-
-
-
+{- FOURMOLU_DISABLE -}
 -- | Decode a string of bits into an unsigned integer.
 decodeUns :: Integer -> String -> Maybe Integer
 decodeUns k ""      = Just k
 decodeUns k ('0':r) = decodeUns (k*2) r
 decodeUns k ('1':r) = decodeUns (k*2+1) r
 decodeUns _ _       = Nothing
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 -- | Decode a string of bits into a signed integer.
 decodeSig :: String -> Maybe Integer
 decodeSig ""      = Just 0
 decodeSig ('0':r) = decodeUns 0 r
 decodeSig ('1':r) = decodeUns (-1) r
 decodeSig _       = Nothing
+{- FOURMOLU_ENABLE -}
+
 
 
 -- | Complete a translation based on already translated subsignals.
@@ -184,6 +186,7 @@ translateBinT trans@(Translator width variant) bin''@(BL _ _ blLength)
     TNumber{format,spacer} -> Translation (if isJust render then render else Just ("undefined",WSError,11) ) []
       where
         bin' = show bin
+        {- FOURMOLU_DISABLE -}
         render :: Render
         render = (\((pref,v),s,p) -> (pref <> applySpacer spacer v,s,p)) <$> case format of
           NFBin -> Just (("0b",bin')                                  , undefStyle, 11)
@@ -191,6 +194,7 @@ translateBinT trans@(Translator width variant) bin''@(BL _ _ blLength)
           NFHex -> Just (("0X",hexDigit <$> chunksOf 4 (extendBits 4)), undefStyle, 11)
           NFUns -> (\i -> (("",show i), WSDefault, 11))                     <$> decodeUns 0 bin'
           NFSig -> (\i -> (("",show i), WSDefault, if i>=0 then 11 else 0)) <$> decodeSig bin'
+        {- FOURMOLU_ENABLE -}
 
         undefStyle = if 'x' `elem` bin' then WSError else WSDefault
         extendBits k = L.replicate (k-1 - ((width+k-1) `rem` k)) '0' <> bin'
@@ -280,6 +284,7 @@ structureT (Translator _ t) = case t of
 
 -- translator based functions
 
+{- FOURMOLU_DISABLE -}
 -- | Run a function on a translator's subtranslators, and combine the results.
 -- This follows 'TRef' references.
 foldTranslator :: (Translator -> a) -> ([a] -> b) -> Translator -> b
@@ -301,6 +306,7 @@ foldTranslator m f (Translator _ variant) = case variant of
   TStyled _ t                       -> f [m t]
   TDuplicate _ t                    -> f [m t]
   TChangeBits{sub}                  -> f [m sub]
+{- FOURMOLU_ENABLE -}
 
 -- | Test if there is a LUT translator in a translator (following references).
 hasLutT :: Translator -> Bool
