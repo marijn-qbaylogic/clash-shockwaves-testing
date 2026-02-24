@@ -1,0 +1,9 @@
+# For more information, see: https://fourmolu.github.io/config/
+indentation: 2
+column-limit: 90
+function-arrows: leading
+indent-wheres: true
+haddock-style: single-line
+in-style: left-align
+if-style: hanging
+single-deriving-parens: auto
