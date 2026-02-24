@@ -17,34 +17,37 @@ The 'Waveform' class, functions derived from it, special 'Waveform' variants suc
 -}
 module Clash.Shockwaves.Internal.Waveform where
 
-import Clash.Prelude
+{- FOURMOLU_DISABLE -}
+import           Clash.Prelude
 
-import Clash.Shockwaves.BitList (BitList)
-import qualified Clash.Shockwaves.BitList as BL
-import Clash.Shockwaves.Internal.TH.Waveform (deriveWaveformTuples)
-import Clash.Shockwaves.Internal.Translator
-import Clash.Shockwaves.Internal.Types
-import Clash.Shockwaves.Internal.Util
-
-import Data.Char (isAlpha)
+import           Data.Char (isAlpha)
 import qualified Data.List as L
-import Data.Maybe (fromMaybe, listToMaybe)
-import Data.Proxy
-import Data.Typeable
-import GHC.Generics
+import           Data.Maybe (fromMaybe, listToMaybe)
+import           Data.Proxy
+import           Data.Typeable
+import           GHC.Generics
 
 -- for standard type instances
-import Data.Int (Int16, Int32, Int64, Int8)
-import Data.Word (Word16, Word32, Word64, Word8)
+import           Data.Int (Int16, Int32, Int64, Int8)
+import           Data.Word (Word16, Word32, Word64, Word8)
 
-import Clash.Num.Erroring (Erroring)
-import Clash.Num.Overflowing (Overflowing)
-import Clash.Num.Saturating (Saturating)
-import Clash.Num.Wrapping (Wrapping)
-import Clash.Num.Zeroing (Zeroing)
-import Data.Complex (Complex)
-import Data.Functor.Identity (Identity)
-import Data.Ord (Down)
+import           Clash.Num.Erroring (Erroring)
+import           Clash.Num.Overflowing (Overflowing)
+import           Clash.Num.Saturating (Saturating)
+import           Clash.Num.Wrapping (Wrapping)
+import           Clash.Num.Zeroing (Zeroing)
+import           Data.Complex (Complex)
+import           Data.Functor.Identity (Identity)
+import           Data.Ord (Down)
+
+-- shockwaves
+import           Clash.Shockwaves.BitList (BitList)
+import qualified Clash.Shockwaves.BitList as BL
+import           Clash.Shockwaves.Internal.TH.Waveform (deriveWaveformTuples)
+import           Clash.Shockwaves.Internal.Translator
+import           Clash.Shockwaves.Internal.Types
+import           Clash.Shockwaves.Internal.Util
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 #ifndef MAX_TUPLE_SIZE

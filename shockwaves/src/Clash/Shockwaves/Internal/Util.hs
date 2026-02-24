@@ -9,23 +9,28 @@ Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 
 Some small helper functions.
 -}
+
 module Clash.Shockwaves.Internal.Util where
 
-import Clash.Prelude
-import Clash.Shockwaves.Internal.Types
-import Control.DeepSeq (NFData, force)
-import Control.Exception (SomeException, catch, evaluate)
-import Control.Exception.Base (Exception (toException))
-import Data.Aeson (ToJSON, encodeFile)
-import Data.Char (isAlpha)
+{- FOURMOLU_DISABLE -}
+import           Clash.Prelude
+
+import           Control.DeepSeq (NFData, force)
+import           Control.Exception (SomeException, catch, evaluate)
+import           Control.Exception.Base (Exception (toException))
+import           Data.Aeson (ToJSON, encodeFile)
+import           Data.Char (isAlpha)
 import qualified Data.List as L
-import Data.List.Split (chunksOf)
-import Data.Map (Map)
+import           Data.List.Split (chunksOf)
+import           Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, listToMaybe)
-import Data.Proxy
-import Data.Typeable
-import GHC.IO (unsafeDupablePerformIO)
+import           Data.Maybe (fromMaybe, listToMaybe)
+import           Data.Proxy
+import           Data.Typeable
+import           GHC.IO (unsafeDupablePerformIO)
+
+import           Clash.Shockwaves.Internal.Types
+{- FOURMOLU_ENABLE -}
 
 -- | A folding function like scan that has separate output and continue values.
 -- The dataflow looks like:

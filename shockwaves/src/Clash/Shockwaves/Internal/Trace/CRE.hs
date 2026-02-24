@@ -8,15 +8,18 @@ Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 -}
 module Clash.Shockwaves.Internal.Trace.CRE where
 
-import Clash.Explicit.Prelude (noReset, register)
-import Clash.Prelude hiding (register, traceSignal)
-import qualified Data.List as L
-import Data.Tuple.Extra (uncurry3)
-import Data.Typeable
+{- FOURMOLU_DISABLE -}
+import           Clash.Prelude hiding (register, traceSignal)
+import           Clash.Explicit.Prelude (noReset, register)
 
-import Clash.Shockwaves.LUT
-import Clash.Shockwaves.Trace
-import Clash.Shockwaves.Waveform hiding (tConst)
+import qualified Data.List as L
+import           Data.Tuple.Extra (uncurry3)
+import           Data.Typeable
+
+import           Clash.Shockwaves.LUT
+import           Clash.Shockwaves.Trace
+import           Clash.Shockwaves.Waveform hiding (tConst)
+{- FOURMOLU_ENABLE -}
 
 -- | A type for displaying clock cycles.
 -- The styles can be configured through style variables `clk_rst`, `clk_a` and `clk_b`.

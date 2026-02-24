@@ -8,12 +8,16 @@ Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 -}
 module Clash.Shockwaves.Internal.BitList where
 
-import Clash.Prelude hiding (concat, drop, split, take)
-import Clash.Sized.Internal.BitVector
-import Data.Aeson hiding (Value)
-import Data.Aeson.Types (toJSONKeyText)
-import Data.String (IsString (fromString))
+{- FOURMOLU_DISABLE -}
+import           Clash.Prelude hiding (concat, drop, split, take)
+
+import           Clash.Sized.Internal.BitVector
+
+import           Data.Aeson hiding (Value)
+import           Data.Aeson.Types (toJSONKeyText)
+import           Data.String (IsString (fromString))
 import qualified Data.Text as Text
+{- FOURMOLU_ENABLE -}
 
 -- | A type like 'BitVector', but with a dynamic size.
 -- It is meant to make type-independent handling of binary representations possible.

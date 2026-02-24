@@ -11,21 +11,24 @@ Type definitions for Shockwaves.
 -}
 module Clash.Shockwaves.Internal.Types where
 
+{- FOURMOLU_DISABLE -}
 import Clash.Prelude hiding (sub)
-import Clash.Shockwaves.Internal.BitList (BitList)
-import Data.Data (Typeable)
-import qualified Data.List as L
-import Data.Map as M
 
-import Control.DeepSeq (NFData (rnf))
-import Data.Aeson hiding (Value)
-import Data.Char (digitToInt)
-import Data.Colour.Names (readColourName)
-import Data.Colour.SRGB (Colour, RGB (..), toSRGB24)
-import Data.Maybe (fromJust)
-import Data.String (IsString)
-import Data.Word (Word8)
-import GHC.Exts (IsString (fromString))
+import           Control.DeepSeq (NFData (rnf))
+import           Data.Aeson hiding (Value)
+import           Data.Char (digitToInt)
+import           Data.Colour.Names (readColourName)
+import           Data.Colour.SRGB (Colour, RGB (..), toSRGB24)
+import qualified Data.List as L
+import           Data.Map as M
+import           Data.Maybe (fromJust)
+import           Data.String (IsString)
+import           Data.Typeable (Typeable)
+import           Data.Word (Word8)
+import           GHC.Exts (IsString (fromString))
+
+import Clash.Shockwaves.Internal.BitList (BitList)
+{- FOURMOLU_ENABLE -}
 
 -- some type aliases for clarity
 type TypeName = String

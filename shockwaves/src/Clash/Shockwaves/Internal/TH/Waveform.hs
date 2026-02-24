@@ -1,16 +1,24 @@
+{- |
+Copyright  :  (C) 2025-2026, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+-}
+
 module Clash.Shockwaves.Internal.TH.Waveform where
 
-import Prelude
+{- FOURMOLU_DISABLE -}
+import           Prelude
 
 -- import           Data.List (foldl')
-import Language.Haskell.TH
+import           Control.Monad (replicateM)
+import           Language.Haskell.TH
 
-import GHC.Generics (Rep) -- Generic
+import           GHC.Generics (Rep) -- Generic
 -- import           Data.Typeable (Typeable)
 -- import           Clash.Prelude (BitPack)
 
-import Clash.Shockwaves.Internal.Types (Translator (..), TranslatorVariant (..))
-import Control.Monad (replicateM)
+import           Clash.Shockwaves.Internal.Types (Translator (..), TranslatorVariant (..))
+{- FOURMOLU_ENABLE -}
 
 deriveWaveformTuples :: Int -> Int -> DecsQ
 deriveWaveformTuples minSize maxSize = do

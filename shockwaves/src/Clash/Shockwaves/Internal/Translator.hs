@@ -10,19 +10,23 @@ Values are constructed from their subvalues.
 -}
 module Clash.Shockwaves.Internal.Translator where
 
-import Clash.Prelude hiding (sub)
-import qualified Clash.Shockwaves.BitList as BL
-import Clash.Shockwaves.Internal.BitList
-import Clash.Shockwaves.Internal.Types
-import Clash.Shockwaves.Internal.Util
-import Data.Bifunctor (first)
+{- FOURMOLU_DISABLE -}
+import           Clash.Prelude hiding (sub)
+
+import           Data.Bifunctor (first)
 import qualified Data.List as L
-import Data.List.Extra (chunksOf)
+import           Data.List.Extra (chunksOf)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, isJust)
-import Data.Tuple.Extra (second)
-import Math.NumberTheory.Logarithms (intLog2)
-import Numeric (showHex)
+import           Data.Maybe (fromMaybe, isJust)
+import           Data.Tuple.Extra (second)
+import           Math.NumberTheory.Logarithms (intLog2)
+import           Numeric (showHex)
+
+import qualified Clash.Shockwaves.BitList as BL
+import           Clash.Shockwaves.Internal.BitList
+import           Clash.Shockwaves.Internal.Types
+import           Clash.Shockwaves.Internal.Util
+{- FOURMOLU_ENABLE -}
 
 -- | Apply a 'WaveStyle' to a 'Translation' value. Only replaces 'WSDefault'.
 applyStyle :: WaveStyle -> Translation -> Translation
