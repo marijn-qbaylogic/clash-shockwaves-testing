@@ -1,9 +1,5 @@
-/*
-
-A cache (for structures).
-Actual cache usage is found in `structure.rs`.
-
-*/
+//! A cache (for structures).
+//! Actual cache usage is found in `structure.rs`.
 
 use std::collections::HashMap;
 

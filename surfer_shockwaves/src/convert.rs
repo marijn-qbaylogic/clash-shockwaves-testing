@@ -1,9 +1,5 @@
-/*
-
-Module for converting from Shockwaves types to Surfer types (structures, translations
-and styles).
-
-*/
+//! Module for converting from Shockwaves types to Surfer types (structures, translations
+//! and styles).
 
 use extism_pdk::error;
 use surfer_translation_types::{

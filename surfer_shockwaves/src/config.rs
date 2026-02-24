@@ -1,12 +1,8 @@
-/*
-
-Module for handling configuration options.
-
-There is one `Config` object that keeps score of all configurations.
-The system looks for a global and local config file, which get parsed into
-`Configuration` objects.
-
-*/
+//! Module for handling configuration options.
+//! 
+//! There is one `Config` object that keeps score of all configurations.
+//! The system looks for a global and local config file, which get parsed into
+//! `Configuration` objects.
 
 use either::Either;
 use either::Either::*;
@@ -92,7 +88,7 @@ impl Config {
         }
     }
 
-    pub fn read_style(&mut self, sfile: String) {
+    fn read_style(&mut self, sfile: String) {
         let mut path = Utf8PathBuf::from(sfile.replace("\\", "/"));
         if path.extension().is_none() {
             path.set_extension("toml");

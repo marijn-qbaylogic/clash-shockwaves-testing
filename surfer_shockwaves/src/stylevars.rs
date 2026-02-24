@@ -1,10 +1,6 @@
-/*
-
-Module for replacing style variables with actual styles as defined in config files.
-Note that most code for reading the style variable configuration files is located
-in `config.rs`.
-
-*/
+//! Module for replacing style variables with actual styles as defined in config files.
+//! Note that most code for reading the style variable configuration files is located
+//! in `config.rs`.
 
 use crate::config::*;
 use crate::data::*;

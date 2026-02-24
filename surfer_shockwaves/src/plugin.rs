@@ -1,8 +1,4 @@
-/*
-
-Module containing the actual Surfer plugin API.
-
-*/
+//! Module containing the actual Surfer plugin API.
 
 use compile_time::datetime_str;
 

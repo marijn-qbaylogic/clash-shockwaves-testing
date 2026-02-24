@@ -1,7 +1,10 @@
+//! Module defining the state of the plugin.
+
 use crate::cache::*;
 use crate::config::*;
 use crate::data::*;
 
+/// The state of the plugin (loaded data and configurations, cache)
 #[derive(Debug)]
 pub struct State {
     pub data: Data,

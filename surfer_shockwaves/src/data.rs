@@ -1,8 +1,5 @@
-/*
+//! All types for VCD Metadata (translators, signals, and LUTs)
 
-All types for VCD Metadata (translators, signals, and LUTs)
-
-*/
 
 use egui::Color32;
 use serde::{Deserialize, Serialize};

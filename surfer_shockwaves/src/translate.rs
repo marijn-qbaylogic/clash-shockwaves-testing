@@ -1,3 +1,5 @@
+//! Module containing all translation machinery.
+
 use extism_pdk::error;
 use surfer_translation_types::TranslationResult;
 

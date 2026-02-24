@@ -1,8 +1,4 @@
-/*
-
-Module for handling signal structures.
-
-*/
+//! Module for handling signal structures.
 
 use surfer_translation_types::VariableInfo;
 
