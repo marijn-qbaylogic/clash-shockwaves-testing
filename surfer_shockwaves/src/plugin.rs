@@ -31,7 +31,15 @@ type VariableMeta = VMeta<(), ()>;
 
 /// Get the name of a signal as a period separated string (i.e. `logic.module.signal`).
 fn signal_name(signal: &VariableMeta) -> String {
-    signal.var.path.strs.join(".") + "." + &signal.var.name
+    signal
+        .var
+        .path
+        .strs
+        .iter()
+        .map(|s| s.to_owned() + ".")
+        .collect::<Vec<_>>()
+        .join("")
+        + &signal.var.name
 }
 
 lazy_static! {

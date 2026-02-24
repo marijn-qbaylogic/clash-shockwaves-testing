@@ -412,6 +412,9 @@ impl State {
             }
             /* Sum translators */
             TranslatorVariant::Sum(translators) => {
+                if translators.is_empty() {
+                    return error("{no subtranslators}");
+                }
                 let n = translators.len();
                 let bits = (usize::BITS - (n - 1).leading_zeros()) as usize;
                 let variant = if bits > 0 {
