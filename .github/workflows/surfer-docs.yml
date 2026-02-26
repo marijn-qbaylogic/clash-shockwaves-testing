@@ -20,9 +20,11 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/surfer_shockwaves
           cargo doc --document-private-items --target-dir docs --no-deps
+          cd ..
+          find -maxdepth 4 -not -path '*/[@.]*'
       - name: Upload Rust docs
         uses: actions/upload-artifact@v4
         with:
           name: Rust docs
-          path: surfer_shockwaves/docs/docs/*
+          path: surfer_shockwaves/docs
           if-no-files-found: error
