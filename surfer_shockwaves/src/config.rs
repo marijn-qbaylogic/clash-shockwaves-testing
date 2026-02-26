@@ -1,5 +1,5 @@
 //! Module for handling configuration options.
-//! 
+//!
 //! There is one `Config` object that keeps score of all configurations.
 //! The system looks for a global and local config file, which get parsed into
 //! `Configuration` objects.
