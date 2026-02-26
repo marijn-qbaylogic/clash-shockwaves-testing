@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 
 import Prelude
 
@@ -145,6 +146,14 @@ renders xs = L.zipWith go rs'
     rs' = L.map (\x -> (showX x, getRen $ translate x)) xs
     go (n,x) y = testCase n $ x @?= y
 
+-- A partially undefined vector spine will result in different pack values,
+-- and thus different translations
+#if MIN_VERSION_clash_prelude(1,8,5)
+#define VECSPINE "True :> undefined :> Nil"
+#else
+#define VECSPINE "undefined :> undefined :> Nil"
+#endif
+
 {-
 
 Tests take the format
@@ -172,8 +181,8 @@ renderTest = testGroup "RENDERED STRING IS CORRECT"
                              ["True <A> False","False <B> True","undefined"]
   , testGroup "Maybe" $ renders [ Nothing , Just True , undef     ]
                                 ["Nothing","Just True","undefined"]
-  , testGroup "Vec 2" $ renders [ True :> False :> Nil , undef     :> undef     :> Nil , True :> undef            , undef                         ]
-                                ["True :> False :> Nil","undefined :> undefined :> Nil","True :> undefined :> Nil","undefined :> undefined :> Nil"] -- True:>undefined being broken has been fixed in Clash and will start working automatically soon
+  , testGroup "Vec 2" $ renders [ True :> False :> Nil , undef     :> undef     :> Nil , True :> undef, undef                         ]
+                                ["True :> False :> Nil","undefined :> undefined :> Nil", VECSPINE     ,"undefined :> undefined :> Nil"]
   , testGroup "Vec 0" $ renders [ Nil @Bool, undef]
                                 ["Nil"     ,"Nil" ]
   , testGroup "Maybe L" $ renders [ Just (La False False)  ,  Just undef     , undef     ]
