@@ -1,5 +1,5 @@
 
-name: surfer-compile
+name: '> surfer-compile'
 
 on:
   push:
