@@ -262,7 +262,7 @@ structureT (Translator _ t) = case t of
           getS (Structure s) = s
   TAdvancedSum{rangeTrans,defTrans} -> structureT $ Translator 0 $ TSum (defTrans : L.map snd rangeTrans)
   TProduct{subs} -> Structure  $ L.map (second structureT) subs
-  TConst _ -> Structure [] -- TODO: derive from value
+  TConst trans -> fromTranslation trans
   TLut _ TypeRef{structureRef} -> structureRef
   TNumber{} -> Structure []
   TArray{sub,len} ->
@@ -275,7 +275,9 @@ structureT (Translator _ t) = case t of
   TDuplicate n t' -> Structure [(n,structureT t')]
   TChangeBits{sub} -> structureT sub
 
-
+-- | Construct a 'Structure' from a 'Translation'.
+fromTranslation :: Translation -> Structure
+fromTranslation (Translation _ subs) = Structure $ L.map (second fromTranslation) subs
 
 
 -- translator based functions
