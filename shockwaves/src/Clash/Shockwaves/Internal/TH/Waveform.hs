@@ -1,3 +1,11 @@
+{-|
+Copyright  :  (C) 2025-2026, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
+A TH function for deriving 'Clash.Shockwaves.Waveform' for tuples.
+-}
+
 module Clash.Shockwaves.Internal.TH.Waveform where
 
 import           Prelude
@@ -11,9 +19,9 @@ import           Clash.Shockwaves.Internal.Types (Translator(..),TranslatorVaria
 import           Control.Monad (replicateM)
 
 
-
-deriveWaveformTuples
-  :: Int -> Int -> DecsQ
+-- | Derive 'Clash.Shockwaves.Waveform' implementations for tuples in the
+-- specified range.
+deriveWaveformTuples :: Int -> Int -> DecsQ
 deriveWaveformTuples minSize maxSize = do
   let waveform  = ConT $ mkName "Waveform"
       -- waveformG = ConT $ mkName "WaveformG"

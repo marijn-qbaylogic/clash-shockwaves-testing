@@ -2,6 +2,8 @@
 Copyright  :  (C) 2025-2026, QBayLogic B.V.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
+Some functions for creating signals for clocks and reset and enable signals.
 -}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -22,27 +24,27 @@ import           Clash.Shockwaves.Trace
 
 
 -- | A type for displaying clock cycles.
--- The styles can be configured through style variables `clk_rst`, `clk_a` and `clk_b`.
+-- The styles can be configured through style variables @clk_rst@, @clk_a@ and @clk_b@.
 data ClockWave = ClockWave Bool
                | ClockInit
   deriving (Generic,Typeable,BitPack,NFDataX)
 
 -- | A type for displaying a reset signal.
--- The styles can be configured through style variables `reset_off` and `reset_on`.
+-- The styles can be configured through style variables @reset_off@ and @reset_on@.
 newtype ResetWave (dom::Domain) = ResetWave Bool
   deriving (Generic,Typeable,BitPack,NFDataX)
 
 -- | A type for displaying an enable signal.
--- The styles can be configured through style variables `enable_off` and `enable_on`.
+-- The styles can be configured through style variables @enable_off@ and @enable_on@.
 newtype EnableWave = EnableWave Bool
   deriving (Generic,Typeable,BitPack,NFDataX)
 
 -- | A type for displaying clock, reset and enable signals.
--- See 'ClockWave', 'ResetWave' and 'EnableWave'.
+-- See 't:ClockWave', 't:ResetWave' and 't:EnableWave'.
 -- It contains these signals as subsignals. The toplevel signal displays the clock
 -- during normal operation, reset when it is active, and enable when it is low.
 -- The combined style of both being active can be configured through the style
--- vairable `reset_on_enable_off`.
+-- vairable @reset_on_enable_off@.
 data CREWave dom = CREWave {clock::ClockWave, reset::ResetWave dom, enable::EnableWave}
   deriving (Generic,Typeable,BitPack,NFDataX)
   deriving Waveform via (WaveformForLUT (CREWave dom))
@@ -74,7 +76,7 @@ rstAndDis :: Render
 rstAndDis = Just ("DISABLED|RESET", WSVar "reset_on_enable_off" WSWarn,11)
 
 -- | Control the styles of the clock wave through style variables
--- `clk_rst`, `clk_a` and `clk_b`.
+-- @clk_rst@, @clk_a@ and @clk_b@.
 instance Waveform ClockWave where
   translator = Translator 2 $ TSum
     [ Translator 1 $ TSum
@@ -85,7 +87,7 @@ instance Waveform ClockWave where
     ]
 
 -- | Control the styles of the reset wave through style variables
--- `reset_on` and `reset_off`.
+-- @reset_on@ and @reset_off@.
 instance (KnownDomain dom) => Waveform (ResetWave dom) where
   translator = Translator 1 $ TSum $ L.map vConst
     ( case resetPolarity @dom of
@@ -93,7 +95,7 @@ instance (KnownDomain dom) => Waveform (ResetWave dom) where
         SActiveLow  -> [rstOff,rstOn] )
 
 -- | Control the styles of the enable wave through style variables
--- `enable_on` and `enable_off`.
+-- @enable_on@ and @enable_off@.
 instance Waveform EnableWave where
   translator = Translator 1 $ TSum
     [ vConst enOff
@@ -101,7 +103,7 @@ instance Waveform EnableWave where
     ]
 
 -- | Control the style of a combined disable and reset through style variable
--- `reset_on_enable_off`.
+-- @reset_on_enable_off@.
 instance KnownDomain dom => WaveformLUT (CREWave dom) where
   translateL = translateWith displayL splitL
     where 
@@ -130,7 +132,7 @@ clkSignal clk = s
 -- | Trace a clock signal. Keep in mind that the clock has to be evaluated in order for
 -- the signal to show up. Alternatively, use 'seq' to force evaluation.
 --
--- The styles can be configured through style variables `clk_rst`, `clk_a` and `clk_b`.
+-- The styles can be configured through style variables @clk_rst@, @clk_a@ and @clk_b@.
 traceClock :: (KnownDomain dom) => String -> Clock dom -> Clock dom
 traceClock lbl clk = traceSignal lbl (clkSignal clk)
                      `seq` clk
@@ -138,7 +140,7 @@ traceClock lbl clk = traceSignal lbl (clkSignal clk)
 -- | Trace a reset signal. Keep in mind that the reset has to be evaluated in order for
 -- the signal to show up. Alternatively, use 'seq' to force evaluation.
 --
--- The styles can be configured through style variables `reset_off` and `reset_on`.
+-- The styles can be configured through style variables @reset_off@ and @reset_on@.
 traceReset :: (KnownDomain dom) => String -> Reset dom -> Reset dom
 traceReset lbl (rst::Reset dom) = traceSignal lbl (ResetWave @dom <$> unsafeFromReset rst)
                                   `seq` rst
@@ -146,7 +148,7 @@ traceReset lbl (rst::Reset dom) = traceSignal lbl (ResetWave @dom <$> unsafeFrom
 -- | Trace an enable signal. Keep in mind that the enable has to be evaluated in order for
 -- the signal to show up. Alternatively, use 'seq' to force evaluation.
 --
--- The styles can be configured through style variables `enable_off` and `enable_on`.
+-- The styles can be configured through style variables @enable_off@ and @enable_on@.
 traceEnable :: (KnownDomain dom) => String -> Enable dom -> Enable dom
 traceEnable lbl en = traceSignal lbl (EnableWave <$> fromEnable en)
                      `seq` en
@@ -158,7 +160,7 @@ traceEnable lbl en = traceSignal lbl (EnableWave <$> fromEnable en)
 -- > traceClockResetEnable "cre" myDesign clockGen resetGen enableGen
 --
 -- The tyle of a combined disable and reset can be configured through style variable 
--- `reset_on_enable_off`. For other options, see 'traceClock', 'traceReset' and
+-- @reset_on_enable_off@. For other options, see 'traceClock', 'traceReset' and
 -- 'traceEnable'.
 traceClockResetEnable
   :: forall dom a. (KnownDomain dom)

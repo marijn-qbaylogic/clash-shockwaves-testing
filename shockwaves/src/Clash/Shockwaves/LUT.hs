@@ -5,7 +5,7 @@ Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 Module      : Clash.Shockwaves.LUT
 Description : Shockwaves tools for LUTs
 
-Everything needed to create 'Waveform' instances that use lookup tables.
+Everything needed to create 'Clash.Shockwaves.Waveform' instances that use lookup tables.
 
 -}
 

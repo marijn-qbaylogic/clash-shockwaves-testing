@@ -2,6 +2,8 @@
 Copyright  :  (C) 2025-2026, QBayLogic B.V.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
+Dynamically sized bitvectors.
 -}
 
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -93,7 +95,7 @@ concat (BL ma ia la) (BL mb ib lb) = BL m i l
 slice :: (Int,Int) -> BitList -> BitList
 slice (from,to) = drop from . take to 
 
--- Convert a 'BitList' into an 'Integer' if it has no undefined bits.
+-- | Convert a 'BitList' into an 'Integer' if it has no undefined bits.
 toInteger :: BitList -> Maybe Integer
 toInteger (BL m i _) | m == 0 = Just $ fromIntegral i
 toInteger _ = Nothing

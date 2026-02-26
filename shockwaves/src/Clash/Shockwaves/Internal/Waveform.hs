@@ -76,7 +76,7 @@ import Constants (mAX_TUPLE_SIZE)
 rFromVal :: Value -> Render
 rFromVal v = Just (v,WSDefault,11)
 
--- | Get a 'Translation' from a 'Value' using 'WSDefault' and precedence 11.
+-- | Get a 't:Translation' from a 'Value' using 'WSDefault' and precedence 11.
 tFromVal :: Value -> Translation
 tFromVal v = Translation (rFromVal v) []
 
@@ -85,7 +85,7 @@ errMsg :: Maybe Value -> Value
 errMsg = maybe "undefined" (\e -> "{undefined: "<>e<>"}")
 
 
--- to get rid of warnings:
+-- | First 'WaveStyle' in an infinite list of values.
 styHead :: [WaveStyle] -> WaveStyle
 styHead (s:_) = s
 styHead _ = error "style list must be long enough"
@@ -94,19 +94,19 @@ styHead _ = error "style list must be long enough"
 
 -- making translators
 
--- | Wrap a 'Translator' in a 'TStyled' translator using some style, unless the
+-- | Wrap a 't:Translator' in a 'TStyled' translator using some style, unless the
 -- provided style is 'WSDefault'.
 wrapStyle :: WaveStyle -> Translator -> Translator
 wrapStyle WSDefault t = t
 wrapStyle s         t = tStyled s t
 
 
--- | Wrap a 'Translator' in a 'TStyled' variant translator with the
+-- | Wrap a 't:Translator' in a 'TStyled' variant translator with the
 -- provided style.
 tStyled :: WaveStyle -> Translator -> Translator
 tStyled s (Translator w v) = Translator w $ TStyled s (Translator w v)
 
--- | Wrap a 'Translator' in a 'TDuplicate' variant translator with the
+-- | Wrap a 't:Translator' in a 'TDuplicate' variant translator with the
 -- provided subsignal name.
 tDup :: SubSignal -> Translator -> Translator
 tDup name (Translator w t) = Translator w $ TDuplicate name (Translator w t)
@@ -474,7 +474,7 @@ class (Typeable a, BitPack a) => WaveformLUT a where
   default translateL :: (Generic a, Show a, WaveformG (Rep a ()), PrecG (Rep a ())) => a -> Translation
   translateL = translateWith renderShow splitL
 
--- | Make sure a 'Translation' is fully defined. If not, return a 'Translation' with @"undefined"@.
+-- | Make sure a 't:Translation' is fully defined. If not, return a 't:Translation' with @"undefined"@.
 safeTranslation :: Translation -> Translation
 safeTranslation = safeValOr (errorT "undefined")
 
@@ -667,6 +667,7 @@ newtype WaveformForNumber (f::NumberFormat) (s::Maybe NSPair) a
   = WfNum a
   deriving (Generic,BitPack,Typeable)
 
+-- | Pair of a 'Nat' and 'Symbol', used for type-level spacer values.
 type NSPair = (Nat,Symbol)
 
 instance (
@@ -682,13 +683,18 @@ instance (
       Translator (width @(WaveformForNumber f s a))
     $ TNumber{format = formatVal (Proxy @f), spacer = spacerVal (Proxy @s)}
 
-
-type DecSpacer = 'Just '(3,"_") -- ^ Default spacer for decimal values (@_@ every 3 digits)
-type HexSpacer = 'Just '(4,"_") -- ^ Default spacer for hexadecimal values (@_@ every 4 digits)
-type OctSpacer = 'Just '(4,"_") -- ^ Default spacer for octal values (@_@ every 4 digits)
-type BinSpacer = 'Just '(8,"_") -- ^ Default spacer for binary values (@_@ every 8 digits)
-type SpacerEvery n = 'Just '(n,"_") -- ^ Add @_@ every /n/ digits.
-type NoSpacer = 'Nothing :: (Maybe NSPair) -- ^ Do not add spacers.
+-- | Default spacer for decimal values (@_@ every 3 digits)
+type DecSpacer = 'Just '(3,"_")
+-- | Default spacer for hexadecimal values (@_@ every 2 digits) 
+type HexSpacer = 'Just '(2,"_")
+-- | Default spacer for octal values (@_@ every 4 digits)
+type OctSpacer = 'Just '(4,"_")
+-- | Default spacer for binary values (@_@ every 8 digits)
+type BinSpacer = 'Just '(8,"_")
+-- | Add @_@ every /n/ digits.
+type SpacerEvery n = 'Just '(n,"_")
+-- | Do not add spacers.
+type NoSpacer = 'Nothing :: (Maybe NSPair)
 
 
 -- | Class for turning a type level 'NumberFormat' into a runtime value.
@@ -705,7 +711,7 @@ instance KnownNFormat NFOct where
 instance KnownNFormat NFBin where
   formatVal _ = NFBin
 
-
+-- | Type to get the runtime value of a type-level number spacer.
 class KnownNSpacer (f :: Maybe NSPair) where
   spacerVal :: proxy f -> Maybe (Integer, String)
 instance KnownNSpacer 'Nothing where
@@ -784,13 +790,13 @@ instance WaveformConst () where
   constRen = rFromVal "()"
 deriving via WaveformForConst () instance Waveform ()
 
--- | Configure styles through style variables `bool_false` and `bool_true`.
+-- | Configure styles through style variables @bool_false@ and @bool_true@.
 instance Waveform Bool where
   translator = Translator 1 $ TSum
     [ tConst $ Just ("False","$bool_false",11)
     , tConst $ Just ("True" ,"$bool_true" ,11) ]
 
--- | Configure styles through style variables `maybe_nothing` and `maybe_just`.
+-- | Configure styles through style variables @maybe_nothing@ and @maybe_just@.
 instance (Waveform a) => Waveform (Maybe a) where
   translator = Translator (width @(Maybe a)) $ TSum
     [ Translator 0 $ TConst $ Translation (Just ("Nothing","$maybe_nothing",11)) []
@@ -806,7 +812,7 @@ instance (Waveform a) => Waveform (Maybe a) where
     ]
 
 
--- | Configure styles through style variables `either_left` and `either_right`.
+-- | Configure styles through style variables @either_left@ and @either_right@.
 instance (Waveform a, Waveform b) => Waveform (Either a b) where
   styles = ["$either_left","$either_right"]
 

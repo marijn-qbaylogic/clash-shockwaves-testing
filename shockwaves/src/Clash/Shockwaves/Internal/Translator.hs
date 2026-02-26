@@ -28,7 +28,7 @@ import           Data.Tuple.Extra (second)
 
 
 
--- | Apply a 'WaveStyle' to a 'Translation' value. Only replaces 'WSDefault'.
+-- | Apply a 'WaveStyle' to a 't:Translation' value. Only replaces 'WSDefault'.
 applyStyle :: WaveStyle -> Translation -> Translation
 applyStyle s (Translation r sb) = Translation (applyStyleR s r) sb
 
@@ -43,7 +43,7 @@ applyStyleR _ r = r
 
 
 
--- | Apply a precedence value to a 'Translation'.
+-- | Apply a precedence value to a 't:Translation'.
 -- If the precedence is higher or equal to that of the current value,
 -- it is wrapped in parentheses.
 applyPrec :: Prec -> Translation -> Translation
@@ -65,7 +65,7 @@ applyPrecs :: Prec -> [(a, Translation)] -> [(a, Translation)]
 applyPrecs p = L.map (second (applyPrec p))
 
 
--- | Get the value of a 'Translation'. If the value is not defined,
+-- | Get the value of a 't:Translation'. If the value is not defined,
 -- return @{value missing}@.
 getVal :: Translation -> Value
 getVal t = case t of
@@ -116,7 +116,9 @@ decodeSig _       = Nothing
 -- the subtranslations. Note for TSum that this is a list containing only the
 -- translation of the variant used, i.e. it behaves like 'TRef', 'TLut' and 'TNumber'.
 --
--- The final two variants, 'TStyle' and 'TDuplicate' are considered /wrappers/
+-- Advanced translators are not supported.
+--
+-- The final two variants, 'TStyled' and 'TDuplicate' are considered /wrappers/
 -- and translate the value recursively.
 translateFromSubs :: Translator -> [(SubSignal,Translation)] -> Translation
 translateFromSubs (Translator _ translator) subs = case translator of
@@ -252,7 +254,7 @@ translateBinT trans@(Translator width variant) bin''@(BL _ _ blLength)
 
 -- structure
 
--- | Return the 'Structure' implied by a 'Translator'. Useful for determining
+-- | Return the 't:Structure' implied by a 't:Translator'. Useful for determining
 -- the structure of a constant translation.
 structureT :: Translator -> Structure
 structureT (Translator _ t) = case t of
@@ -275,7 +277,7 @@ structureT (Translator _ t) = case t of
   TDuplicate n t' -> Structure [(n,structureT t')]
   TChangeBits{sub} -> structureT sub
 
--- | Construct a 'Structure' from a 'Translation'.
+-- | Construct a 't:Structure' from a 't:Translation'.
 fromTranslation :: Translation -> Structure
 fromTranslation (Translation _ subs) = Structure $ L.map (second fromTranslation) subs
 

@@ -8,7 +8,7 @@ Description : Shockwaves tools for styling signals
 Everything needed to add different styles to the waveform viewer.
 
 Waveforms can be styled in a number of ways. Various standard styles are provided
-in 'WaveformStyle'. It is also possible to use custom colors using 'WSColor'.
+in 'WaveStyle'. It is also possible to use custom colors using 'WaveStyle.WSColor'.
 These values can be provided in 3 typical ways:
 
 - Directly from an @RGB Word8@ value, using the 'WSColor' constructor: 
@@ -19,8 +19,15 @@ These values can be provided in 3 typical ways:
   value can be represented using a color name or hex color string literal.
   See 'Data.Colour.Names.readColourName'.
 
-Finally, 'WSVar' makes it possible to define style variables in config files.
-This can also be achieved by using a string literal starting with @$@.
+Finally, there are a few special styles.
+
+- 'WSError' is propagated throughout the signal hierarchy.
+- 'WSDefault' is the only style to be replaced by the 'Clash.Shockwaves.Waveform.TStyled'
+  translator, and gets turned into 'WSNormal'.
+- 'WSInherit n' inherits the style of the _n_'th subsignal.
+- 'WSVar' makes it possible to define style variables in config files - this can also
+  be created by using a string literal starting with @$@, which uses 'WSDefault' as the
+  fallback value.
 
 Some examples:
 

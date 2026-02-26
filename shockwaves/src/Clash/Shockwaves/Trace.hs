@@ -161,6 +161,7 @@ import           Clash.Annotations.Primitive
   ) #-}
 #endif
 
+-- | A clock period in _ns_.
 type Period   = Int
 type Changed  = Bool
 type Value    = (Natural, Natural) -- (Mask, Value)
@@ -169,11 +170,15 @@ type Width    = Int
 -- | Serialized TypeRep we need to store for dumpReplayable / replay
 type TypeRepBS = ByteString
 
+-- | A function that adds one or more values to a 'LUTMap'.
 type AddValue = LUTMap -> LUTMap
+-- | A map of traces.
 type TraceMap = Map.Map String (TypeRepBS, Period, Width, [AddValue], [Value])
+-- | A map of all traces and Shockwaves tables.
 data Maps     = Maps{signalMap::SignalMap,typeMap::TypeMap,traceMap::TraceMap}
   deriving (Generic,Default)
 
+-- | An alias for JSON data.
 type JSON = Json.Value
 
 
