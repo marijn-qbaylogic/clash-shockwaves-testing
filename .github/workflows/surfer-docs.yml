@@ -24,5 +24,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Rust docs
-          path: surfer_shockwaves/docs/docs
+          path: surfer_shockwaves/docs/docs/*
           if-no-files-found: error
