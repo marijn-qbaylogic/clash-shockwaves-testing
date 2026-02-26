@@ -1,51 +1,51 @@
 //! # Shockwaves Surfer extension
-//! 
+//!
 //! This is the Surfer extension for Shockwaves. Shockwaves is a system developed
 //! for Clash to display typed waveforms, but is flexible and modular enough to
 //! be used for other purposes as well.
-//! 
-//! 
+//!
+//!
 //! ## Inner workings
-//! 
+//!
 //! The extension has a global state, storing the translation metadata,
 //! configuration options, and a cache of structures.
-//! 
+//!
 //! When a VCD file is opened, the translator looks for a JSON file with the same
 //! base name. If found, this file is parsed to obtain the metadata.
-//! 
+//!
 //! On start and when a VCD file is loaded, the extension also looks for a global and
 //! local configuration respectively. When a VCD is loaded, any style files listed in
 //! these configuration files are re-read, and all defined style variables are listed.
 //! Any occurances of these style variables in the metadata are then replaced.
-//! 
+//!
 //! When Surfer looks whether a signal can be translated, the signal is looked for
 //! in the map of known signals.
-//! 
+//!
 //! When Surfer asks for a signal's structure, the signal's type is determined, and
 //! the structure of that type is either recovered from cache, or determined from the
 //! type's translator.
-//! 
+//!
 //! When Surfer translates a value, the type is obtained from the signal, the translator
 //! is obtained from the type, and the translator is used to translate the binary data.
 //! The translation is then parsed once again to propagate any special styles.
-//! 
+//!
 //! The translators produce a translation that has an render value (the text, style and
 //! operator precedence of the toplevel signal) and optional subsignals.
-//! 
-//! 
+//!
+//!
 //! ### Example
-//! 
+//!
 //! In Haskell, we have a datatype
-//! 
+//!
 //! ```hs
 //! data T = A Bool | B
 //! ```
-//! 
+//!
 //! It has the binary values `00`, `01` and `1x`.
-//! 
+//!
 //! The automatically derived `Waveform` instance creates a translator definition
 //! that roughly takes the shape:
-//! 
+//!
 //! ```
 //! "T":
 //!     Sum
@@ -55,9 +55,9 @@
 //!         Duplicate
 //!             Const "B"
 //! ```
-//! 
+//!
 //! In the JSON file, this looks like:
-//! 
+//!
 //! ```json
 //! "<...>:T": {
 //!     "w": 2,
@@ -109,9 +109,9 @@
 //!     }
 //! }
 //! ```
-//! 
+//!
 //! This gets parsed into a translator structure:
-//! 
+//!
 //! ```
 //! Translator(2,TranslatorVariant::Sum(vec![
 //!     Translator(1,TranslatorVariant::Duplicate(
@@ -139,9 +139,9 @@
 //!     )),
 //! ]));
 //! ```
-//! 
+//!
 //! This produces the following translations:
-//! 
+//!
 //! ```
 //! //00
 //! Translation(
@@ -162,7 +162,7 @@
 //!         ))
 //!     ]
 //! )
-//! 
+//!
 //! //01
 //! Translation(
 //!     Some(("A True",WaveStyle::Inherit(0),10)),
@@ -179,7 +179,7 @@
 //!         ("B",Translation(None,vec![]))
 //!     ]
 //! )
-//! 
+//!
 //! //1x
 //! Translation(
 //!     Some(("B",WaveStyle::Inherit(0),11)),
@@ -200,9 +200,9 @@
 //!     ]
 //! )
 //! ```
-//! 
+//!
 //! These are finally turned into the Surfer representation:
-//! 
+//!
 //! ```
 //! //1x
 //! TranslationResult{
@@ -237,9 +237,8 @@
 //!     ]
 //! }
 //! ```
-//! 
-//! 
-
+//!
+//!
 
 mod cache;
 mod config;
