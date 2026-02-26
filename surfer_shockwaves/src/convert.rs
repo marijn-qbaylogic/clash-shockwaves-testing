@@ -12,16 +12,16 @@ impl Structure {
     /// Convert Shockwaves `Structure` to Surfer `VariableInfo`
     pub fn convert(&self) -> VariableInfo {
         if self.0.is_empty() {
-            VariableInfo::String
-        } else {
-            VariableInfo::Compound {
-                subfields: self
-                    .0
-                    .iter()
-                    .map(|(name, st)| (name.clone(), st.convert()))
-                    .collect(),
-            }
-        }
+VariableInfo::String
+} else {
+VariableInfo::Compound {
+subfields: self
+    .0
+    .iter()
+    .map(|(name, st)| (name.clone(), st.convert()))
+    .collect(),
+}
+}
     }
 }
 
