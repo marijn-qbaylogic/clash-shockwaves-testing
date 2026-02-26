@@ -1,4 +1,4 @@
-name: haddock-docs
+name: '> haddock-docs'
 
 on:
   push:
