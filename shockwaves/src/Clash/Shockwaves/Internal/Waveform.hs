@@ -119,7 +119,7 @@ tRef (_::Proxy a) = Translator (width @a) $ TRef (typeName @a) TypeRef
   , structureRef = structure @a
   }
 
--- | Create a constant translator.
+-- | Create a constant translator that consumes 0 bits and has no subsignals.
 tConst :: Render -> Translator
 tConst r = Translator 0 $ TConst $ Translation r []
 
@@ -253,7 +253,7 @@ class WaveformG a where
 
 -- void type (assuming it has a custom bitpack implementation)
 instance WaveformG (D1 m1 V1 k) where
-  translatorG _ _ = Translator 0 $ TConst $ Translation Nothing []
+  translatorG _ _ = tConst Nothing
   constrTranslatorsG _ = undefined
   fieldTranslatorsG = undefined
 
@@ -649,7 +649,7 @@ newtype WaveformForConst a = WfConst a deriving (Generic,BitPack,Typeable)
 instance (WaveformConst a, BitPack a, Typeable a)
   => Waveform (WaveformForConst a) where
   typeName = typeNameP (Proxy @a)
-  translator = Translator 0 $ TConst $ constTrans @a
+  translator = Translator (bitsize $ Proxy @a) $ TConst $ constTrans @a
 
 
 
@@ -676,7 +676,6 @@ instance (
   , Typeable s
   , KnownNFormat f
   , KnownNSpacer s
-  , Integral a
   ) => Waveform (WaveformForNumber (f::NumberFormat) (s::Maybe NSPair) a) where
   typeName = typeNameP (Proxy @a)
   translator =
