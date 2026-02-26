@@ -10,8 +10,11 @@ on:
       - 'surfer_shockwaves/**'
   workflow_dispatch:
 
+env:
+  RUSTFLAGS: "-Dwarnings"
+
 jobs:
-  build:
+  fmt:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -20,3 +23,11 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/surfer_shockwaves
           cargo fmt --check
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run Clippy
+        run: |
+          cd $GITHUB_WORKSPACE/surfer_shockwaves
+          cargo clippy --all-targets --all-features
