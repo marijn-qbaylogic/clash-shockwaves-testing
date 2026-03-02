@@ -9,12 +9,9 @@ A TH function for deriving 'Clash.Shockwaves.Waveform' for tuples.
 module Clash.Shockwaves.Internal.TH.Waveform where
 
 import           Prelude
--- import           Data.List (foldl')
 import           Language.Haskell.TH
 
-import           GHC.Generics (Rep) --Generic
--- import           Data.Typeable (Typeable)
--- import           Clash.Prelude (BitPack)
+import           GHC.Generics (Rep)
 import           Clash.Shockwaves.Internal.Types (Translator(..),TranslatorVariant(..))
 import           Control.Monad (replicateM)
 

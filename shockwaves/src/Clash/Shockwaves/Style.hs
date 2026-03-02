@@ -35,16 +35,29 @@ Some examples:
 import Shockwaves.Style
 import Shockwaves.Style.Colors as C
 
-data Col = Red | Green | Blue | Yellow | Cyan deriving ...
+data Col = Red | Green | Blue | Yellow | Cyan | Magenta deriving ...
 
 instance Waveform Col where
   styles = [ WSColor (RGB 255 0 0) -- RGB value
            , wsColor C.lime        -- Colour value
            , "blue"                -- color name
            , "#ffff00"             -- hexadecimal color
-           , "$cyan"               -- style variable
+           , "$cyan"               -- style variable "cyan"; defaults to WSDefault
+           , WSVar "magenta"       -- style variable "magenta", defaults to #ff00ff
+                   "#f0f"
 @
 
+and in a translation:
+
+@
+Translation (Just ("x",Inherit 1,11))             -- appears as blue
+  [ ("a",Translation (Just ("p","red" ,11)) [])   -- appears as red
+  , ("b",Translation (Just ("q","blue",11)) []) ] -- appears as blue
+
+Translation (Just ("x","blue",11))                   -- appears as WSError
+  [ ("a",Translation (Just ("p",WSDefault,11)) [])   -- appears as WSNormal
+  , ("b",Translation (Just ("q",WSError  ,11)) []) ] -- appears as WSError
+@
 
 -}
 

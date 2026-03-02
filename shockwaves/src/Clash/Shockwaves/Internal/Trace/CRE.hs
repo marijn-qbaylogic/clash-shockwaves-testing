@@ -63,9 +63,11 @@ clkB :: Render
 clkB = Just ("",WSVar "clk_b" "#83b",11)
 
 rstOff :: Render
-rstOff = Just ("ACTIVE", WSVar "reset_off" WSHidden,11)
+rstOff = Just ("DEASSERTED", WSVar "reset_off" WSHidden,11)
 rstOn :: Render
-rstOn = Just ("RESET", WSVar "reset_on" WSWarn,11)
+rstOn = Just ("ASSERTED", WSVar "reset_on" WSWarn,11)
+rstOn' :: Render
+rstOn' = Just ("RESET", WSVar "reset_on" WSWarn,11)
 
 enOn :: Render
 enOn = Just ("ENABLED", WSVar "enable_on" WSHidden,11)
@@ -91,8 +93,8 @@ instance Waveform ClockWave where
 instance (KnownDomain dom) => Waveform (ResetWave dom) where
   translator = Translator 1 $ TSum $ L.map vConst
     ( case resetPolarity @dom of
-        SActiveHigh -> [rstOff,rstOn]
-        SActiveLow  -> [rstOff,rstOn] )
+        SActiveHigh -> [rstOff,rstOn ]
+        SActiveLow  -> [rstOn ,rstOff] )
 
 -- | Control the styles of the enable wave through style variables
 -- @enable_on@ and @enable_off@.
@@ -109,7 +111,7 @@ instance KnownDomain dom => WaveformLUT (CREWave dom) where
     where 
       displayL (CREWave c r (EnableWave e)) = case (c,isRst r,e) of
         (_              ,True,False) -> rstAndDis
-        (_              ,True,_    ) -> rstOn
+        (_              ,True,_    ) -> rstOn'
         (_              ,_   ,False) -> enOff
         (ClockInit      ,_   ,_    ) -> clkI
         (ClockWave False,_   ,_    ) -> clkA
@@ -141,9 +143,9 @@ traceClock lbl clk = traceSignal lbl (clkSignal clk)
 -- the signal to show up. Alternatively, use 'seq' to force evaluation.
 --
 -- The styles can be configured through style variables @reset_off@ and @reset_on@.
-traceReset :: (KnownDomain dom) => String -> Reset dom -> Reset dom
-traceReset lbl (rst::Reset dom) = traceSignal lbl (ResetWave @dom <$> unsafeFromReset rst)
-                                  `seq` rst
+traceReset :: forall dom. (KnownDomain dom) => String -> Reset dom -> Reset dom
+traceReset lbl rst = traceSignal lbl (ResetWave @dom <$> unsafeFromReset rst)
+                     `seq` rst
 
 -- | Trace an enable signal. Keep in mind that the enable has to be evaluated in order for
 -- the signal to show up. Alternatively, use 'seq' to force evaluation.
@@ -159,7 +161,7 @@ traceEnable lbl en = traceSignal lbl (EnableWave <$> fromEnable en)
 --
 -- > traceClockResetEnable "cre" myDesign clockGen resetGen enableGen
 --
--- The tyle of a combined disable and reset can be configured through style variable 
+-- The style of a combined disable and reset can be configured through style variable 
 -- @reset_on_enable_off@. For other options, see 'traceClock', 'traceReset' and
 -- 'traceEnable'.
 traceClockResetEnable
