@@ -53,11 +53,11 @@ instance Waveform Col where
 and in a translation:
 
 @
-Translation (Just ("x",Inherit 1,11))             -- appears as blue
-  [ ("a",Translation (Just ("p","red" ,11)) [])   -- appears as red
-  , ("b",Translation (Just ("q","blue",11)) []) ] -- appears as blue
+Translation (Just ("(p,q)",Inherit 1,11))           -- appears as blue
+  [ ("a",Translation (Just ("p",WSHidden,11)) [])   -- no value is shown
+  , ("b",Translation (Just ("q","blue"  ,11)) []) ] -- appears as blue
 
-Translation (Just ("x","blue",11))                   -- appears as WSError
+Translation (Just ("(p,q)","blue",11))               -- appears as WSError
   [ ("a",Translation (Just ("p",WSDefault,11)) [])   -- appears as WSNormal
   , ("b",Translation (Just ("q",WSError  ,11)) []) ] -- appears as WSError
 @
