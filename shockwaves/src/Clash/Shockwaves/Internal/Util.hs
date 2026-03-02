@@ -31,6 +31,7 @@ import           Control.Exception.Base (Exception(toException))
 
 -- | A folding function like scan that has separate output and continue values.
 -- The dataflow looks like:
+--
 -- >    [ b,    b',   b'' ]
 -- >      v     v     v
 -- > a > [f] > [f] > [f] > _
@@ -43,7 +44,6 @@ carryFoldl f i (x:xs) = y:carryFoldl f i' xs
 
 -- | Insert value into dictionary if the key was not yet present.
 insertIfMissing :: (Ord k) => k -> v -> Map k v -> Map k v
--- insertIfMissing k v m = if member k m then m else M.insert k v m
 insertIfMissing k v = M.alter (Just . fromMaybe v) k
 
 

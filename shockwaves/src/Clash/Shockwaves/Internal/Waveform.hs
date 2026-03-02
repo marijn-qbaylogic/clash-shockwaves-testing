@@ -730,15 +730,7 @@ instance (KnownNat n, KnownSymbol s) => KnownNSpacer ('Just '(n, s)) where
 
 
 
-
-
-
-
-
-
-
 --------------------------------------- IMPLEMENTATIONS ----------------------------------
--- INSTANCES FOR STANDARD HASKELL TYPES
 
 instance WaveformConst () where
   constRen = rFromVal "()"
@@ -871,7 +863,7 @@ deriving via WaveformForConst (SNat n)
   instance (KnownNat n, BitPack (SNat n)) => Waveform (SNat n)
 
 
--- the monster that is RTree :/
+-- RTree implementation
 
 -- | Helper family for implementing 'Waveform' for 'RTree'.
 type family RTreeIsLeaf d where
