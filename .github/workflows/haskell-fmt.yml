@@ -2,9 +2,9 @@
 name: 'haskell-fmt'
 
 on:
-  pull_request:
-    paths:
-      - 'shockwaves/src**'
+#  pull_request:
+#    paths:
+#      - 'shockwaves/src**'
   workflow_dispatch:
 
 env:
