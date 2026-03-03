@@ -25,6 +25,9 @@ import           Clash.Shockwaves.Trace
 
 -- | A type for displaying clock cycles.
 -- The styles can be configured through style variables @clk_rst@, @clk_a@ and @clk_b@.
+--
+-- __NB__: This is not a traditional clock wave! The clock signal alternates
+-- /every cycle/, rather than going high and low /within/ a cycle. 
 data ClockWave = ClockWave Bool
                | ClockInit
   deriving (Generic,Typeable,BitPack,NFDataX)
@@ -135,6 +138,9 @@ clkSignal clk = s
 -- the signal to show up. Alternatively, use 'seq' to force evaluation.
 --
 -- The styles can be configured through style variables @clk_rst@, @clk_a@ and @clk_b@.
+--
+-- __NB__: This is not a traditional clock wave! The clock signal alternates
+-- /every cycle/, rather than going high and low /within/ a cycle. 
 traceClock :: (KnownDomain dom) => String -> Clock dom -> Clock dom
 traceClock lbl clk = traceSignal lbl (clkSignal clk)
                      `seq` clk
@@ -164,6 +170,9 @@ traceEnable lbl en = traceSignal lbl (EnableWave <$> fromEnable en)
 -- The style of a combined disable and reset can be configured through style variable 
 -- @reset_on_enable_off@. For other options, see 'traceClock', 'traceReset' and
 -- 'traceEnable'.
+--
+-- __NB__: This does not contain a traditional clock wave! The clock signal alternates
+-- /every cycle/, rather than going high and low /within/ a cycle. 
 traceClockResetEnable
   :: forall dom a. (KnownDomain dom)
   => String
