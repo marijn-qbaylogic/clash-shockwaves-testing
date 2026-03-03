@@ -100,7 +100,7 @@ module Clash.Shockwaves.Trace
 import           Prelude
 
 -- Clash:
-import           Clash.Annotations.Primitive (hasBlackBox)
+import           Clash.Magic           (clashSimulation)
 import           Clash.Signal.Internal (fromList)
 import           Clash.Signal
   (KnownDomain(..), SDomainConfiguration(..), Signal, bundle, unbundle)
@@ -181,6 +181,11 @@ data Maps     = Maps{signalMap::SignalMap,typeMap::TypeMap,traceMap::TraceMap}
 -- | An alias for JSON data.
 type JSON = Json.Value
 
+-- | Run function on signal only in simulation
+simOnly :: (s->s) -> s -> s
+simOnly f sig = if clashSimulation then
+    f sig
+  else sig
 
 
 -- | Check if a signal name already occurs in the trace map.
@@ -303,14 +308,13 @@ traceSignal
   -> Signal dom a
   -- ^ Signal to trace
   -> Signal dom a
-traceSignal traceName signal =
+traceSignal traceName = simOnly $ \signal ->
   case knownDomain @dom of
     SDomainConfiguration{sPeriod} ->
       unsafePerformIO $
         traceSignal# maps# (snatToNum sPeriod) traceName signal
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceSignal #-}
-{-# ANN traceSignal hasBlackBox #-}
 
 -- | Trace a single signal. Will emit an error if a signal with the same name
 -- was previously registered.
@@ -329,11 +333,10 @@ traceSignal1
   -> Signal dom a
   -- ^ Signal to trace
   -> Signal dom a
-traceSignal1 traceName signal =
+traceSignal1 traceName = simOnly $ \signal ->
   unsafePerformIO (traceSignal# maps# 1 traceName signal)
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceSignal1 #-}
-{-# ANN traceSignal1 hasBlackBox #-}
 
 -- | Trace a single vector signal: each element in the vector will show up as
 -- a different trace. If the trace name already exists, this function will emit
@@ -355,14 +358,13 @@ traceVecSignal
   -> Signal dom (Vec (n+1) a)
   -- ^ Signal to trace
   -> Signal dom (Vec (n+1) a)
-traceVecSignal traceName signal =
+traceVecSignal traceName = simOnly $ \signal ->
   case knownDomain @dom of
     SDomainConfiguration{sPeriod} ->
       unsafePerformIO $
         traceVecSignal# maps# (snatToNum sPeriod) traceName signal
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceVecSignal #-}
-{-# ANN traceVecSignal hasBlackBox #-}
 
 -- | Trace a single vector signal: each element in the vector will show up as
 -- a different trace. If the trace name already exists, this function will emit
@@ -383,11 +385,10 @@ traceVecSignal1
   -> Signal dom (Vec (n+1) a)
   -- ^ Signal to trace
   -> Signal dom (Vec (n+1) a)
-traceVecSignal1 traceName signal =
+traceVecSignal1 traceName = simOnly $ \signal ->
   unsafePerformIO $ traceVecSignal# maps# 1 traceName signal
 -- See: https://github.com/clash-lang/clash-compiler/pull/2511
 {-# CLASH_OPAQUE traceVecSignal1 #-}
-{-# ANN traceVecSignal1 hasBlackBox #-}
 
 iso8601Format :: UTCTime -> String
 iso8601Format = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S"
