@@ -5,9 +5,6 @@ license:             BSD-2-Clause
 author:              Marijn Adriaanse <marijn@qbaylogic.com>
 maintainer:          QBayLogic B.V. <devops@qbaylogic.com>
 
-Data-files:
-  prims/common/Clash_Shockwaves_Trace.primitives.yaml
-
 flag large-tuples
   description:
     Generate instances for `Waveform` for tuples up to the GHC imposed maximum.

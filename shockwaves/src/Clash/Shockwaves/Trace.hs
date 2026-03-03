@@ -136,7 +136,7 @@ import           GHC.Natural           (Natural)
 import           GHC.Stack             (HasCallStack)
 import           GHC.TypeLits          (KnownNat, type (+))
 import           GHC.Generics          (Generic)
--- import           System.IO.Unsafe      (unsafePerformIO)
+import           System.IO.Unsafe      (unsafePerformIO)
 import           Type.Reflection       (Typeable, TypeRep, typeRep)
 import qualified Data.Aeson as Json
 import           Data.Aeson            ((.=))
@@ -150,15 +150,6 @@ import           Clash.Shockwaves.Internal.Waveform hiding (width)
 #ifdef CABAL
 import qualified Data.Version
 import qualified Paths_shockwaves
-
-import           System.FilePath
-import           System.IO.Unsafe
-import           Clash.Annotations.Primitive
-
-{-# ANN module
-  ( Primitive [minBound..] 
-    (unsafePerformIO Paths_shockwaves.getDataDir </> "prims" </> "common")
-  ) #-}
 #endif
 
 -- | A clock period in _ns_.
@@ -489,7 +480,7 @@ dumpVCD## (offset, cycles) Maps{signalMap,typeMap,traceMap} now
   headerDate       = ["$date", Text.pack $ iso8601Format now, "$end"]
 
 #ifdef CABAL
-  clashVer         = Data.Version.showVersion Paths_shockwaves.version -- actually Shockwaves version; TODO
+  clashVer         = "Shockwaves" <> Data.Version.showVersion Paths_shockwaves.version -- actually Shockwaves version; TODO
 #else
   clashVer         = "development"
 #endif
