@@ -13,18 +13,18 @@ For more options, see "Clash.Shockwaves.Waveform", "Clash.Shockwaves.Style",
 
 Note: this exports the "Clash.Shockwaves.Trace" module, which creates name space
 collisions with "Clash.Signal.Trace". Import qualified or selectively.
-
 -}
 module Clash.Shockwaves (
   -- * Waveform
-  Waveform(styles),
-  WaveStyle(..),
+  Waveform (styles),
+  WaveStyle (..),
+
   -- * Tracing
   module Clash.Shockwaves.Trace,
-  writeFileJSON
+  writeFileJSON,
 ) where
 
 import Clash.Shockwaves.Internal.Types
-import Clash.Shockwaves.Internal.Waveform
 import Clash.Shockwaves.Internal.Util
+import Clash.Shockwaves.Internal.Waveform
 import Clash.Shockwaves.Trace

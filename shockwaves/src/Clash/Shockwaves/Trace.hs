@@ -1,4 +1,4 @@
-{-|
+{- |
 Copyright  :  (C) 2018, Google Inc.
                   2019, Myrtle Software Ltd
                   2022-2026, QBayLogic B.V.
