@@ -21,6 +21,8 @@ jobs:
         with:
           ghc-version: '9.10.3'
           cabal-version: '3.14.2.0'
+      - name: Set up fourmolu
+        run: stack install fourmolu
       - name: Check formatting
         run: |
           cd $GITHUB_WORKSPACE/shockwaves
