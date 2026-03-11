@@ -101,7 +101,7 @@ There are many translator variants available:
   - `"P":<prec>`: the precedence of the output
 - `{"N":{"f":<format>}}`: a number. `<format>` can be:
   - `"U"`: unsigned
-  - `"S"`: signed
+  - `{"S":<prec>}`: signed, with the precedence of negative numbers
   - `"H"`: hexadecimal
   - `"O"`: octal
   - `"B"`: binary

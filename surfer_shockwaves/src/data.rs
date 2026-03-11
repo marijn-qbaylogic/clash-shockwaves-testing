@@ -195,7 +195,7 @@ pub enum BitPart {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum NumberFormat {
     #[serde(alias = "S")]
-    Sig,
+    Sig(Prec),
     #[serde(alias = "U")]
     Uns,
     #[serde(alias = "H")]

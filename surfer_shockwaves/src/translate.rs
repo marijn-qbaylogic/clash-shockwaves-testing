@@ -65,7 +65,7 @@ fn translate_number(value: &str, format: &NumberFormat, spacer: &NumberSpacer) -
 
     Translation(
         Some(match format {
-            NumberFormat::Sig => {
+            NumberFormat::Sig(neg_prec) => {
                 // slightly cursed way of doing this - convert to base 256 (bytes), then to bigint, then to string
                 let n = value.len().div_ceil(8);
                 let mut bytes = vec![0u8; n];
@@ -87,7 +87,7 @@ fn translate_number(value: &str, format: &NumberFormat, spacer: &NumberSpacer) -
 
                 let big = BigInt::from_signed_bytes_le(&bytes);
                 let bigstr = big.to_string();
-                let prec = if bigstr.starts_with('-') { 6 } else { ATOMIC };
+                let prec = if bigstr.starts_with('-') { *neg_prec } else { ATOMIC };
 
                 (apply_spacer(bigstr), WaveStyle::Default, prec)
             }
