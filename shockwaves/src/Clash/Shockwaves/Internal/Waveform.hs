@@ -698,14 +698,15 @@ instance
   translator =
     Translator (width @(WaveformForNumber f s a))
       $ TNumber
-          { format = formatVal (Proxy @f)
-          , spacer = spacerVal (Proxy @s)
-          , prefix = case formatVal (Proxy @f) of
-                        NFBin -> "0b"
-                        NFOct -> "0o"
-                        NFHex -> "0X"
-                        _ -> ""
-          , warn = False }
+        { format = formatVal (Proxy @f)
+        , spacer = spacerVal (Proxy @s)
+        , prefix = case formatVal (Proxy @f) of
+            NFBin -> "0b"
+            NFOct -> "0o"
+            NFHex -> "0X"
+            _ -> ""
+        , warn = False
+        }
 
 -- | Default spacer for decimal values (@_@ every 3 digits)
 type DecSpacer = 'Just '(3, "_")
