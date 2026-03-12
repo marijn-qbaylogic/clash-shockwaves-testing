@@ -7,9 +7,11 @@ A TH function for deriving 'Clash.Shockwaves.Waveform' for tuples.
 -}
 module Clash.Shockwaves.Internal.TH.Waveform where
 
+import Prelude
+
 import Control.Monad (replicateM)
 import Language.Haskell.TH
-import Prelude
+import Data.Foldable (foldl')
 
 {- | Derive 'Clash.Shockwaves.Waveform' implementations for tuples in the
 specified range.
