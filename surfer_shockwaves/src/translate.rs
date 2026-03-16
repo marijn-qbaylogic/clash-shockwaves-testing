@@ -87,7 +87,7 @@ fn translate_number(value: &str, format: &NumberFormat, spacer: &NumberSpacer) -
 
                 let big = BigInt::from_signed_bytes_le(&bytes);
                 let bigstr = big.to_string();
-                let prec = if bigstr.starts_with('-') { 0 } else { ATOMIC };
+                let prec = if bigstr.starts_with('-') { 6 } else { ATOMIC };
 
                 (apply_spacer(bigstr), WaveStyle::Default, prec)
             }
