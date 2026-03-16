@@ -13,6 +13,7 @@ Other guides:
 - [How to implement Waveform for constant value types](CONSTANT.md)
 - [How to implement Waveform for integer-like types](NUMBER.md)
 - [How to write a custom Waveform instance](WAVEFORM.md)
+- [How to use the precedence system](PREC.md)
 - [How to implement Waveform for GADTs](GADTS.md)
 - [How to add extra information to your data types](EXTRA_INFO.md)
 - [How to add translations for difficult to unpack types](LUTS.md)

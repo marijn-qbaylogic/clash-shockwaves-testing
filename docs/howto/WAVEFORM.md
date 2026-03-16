@@ -103,6 +103,7 @@ For custom operators, just use the operator precedence for both.
 If values never need parentheses, use `preci=-1` and `preco=11`.
 In a case like `fromList [<sub[0]>,<sub[1]>]` you'd want to use `preco=10` (because the value is joined by a space)
 but `preci=-1` (since the list syntax isolates the subvalues, so they never need parentheses).
+For a more detailed look, see [this guide](PREC.md).
 
 If `TProduct` is not flexible enough, you might want to use `TAdvancedProduct`. This translator
 allows you to translate arbitrary slices of bits with translators, and then construct the value
