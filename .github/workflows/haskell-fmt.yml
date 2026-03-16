@@ -2,6 +2,9 @@
 name: 'haskell-fmt'
 
 on:
+  push:
+    paths:
+      - 'shockwaves/src/**'
   pull_request:
     paths:
       - 'shockwaves/src/**'
