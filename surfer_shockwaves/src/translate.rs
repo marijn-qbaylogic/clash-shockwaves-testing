@@ -93,7 +93,11 @@ fn translate_number(
 
                 let big = BigInt::from_signed_bytes_le(&bytes);
                 let bigstr = big.to_string();
-                let prec = if bigstr.starts_with('-') { *neg_prec } else { ATOMIC };
+                let prec = if bigstr.starts_with('-') {
+                    *neg_prec
+                } else {
+                    ATOMIC
+                };
 
                 (
                     prefix.to_owned() + &apply_spacer(bigstr),
