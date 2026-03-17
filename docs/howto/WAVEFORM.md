@@ -66,7 +66,7 @@ translator = Translator width $ TSum
 
 If the capabilities of `TSum` are insufficient, you might want to use `TAdvancedSum`. This translator
 allows you to select the bits used to determine the variant, selects the translator based on ranges of values,
-and passes all bits to the selected translator.
+and passes all bits to the selected translator. See [this guide](ADVANCED.md).
 
 
 #### Product types
@@ -107,7 +107,7 @@ For a more detailed look, see [this guide](PREC.md).
 
 If `TProduct` is not flexible enough, you might want to use `TAdvancedProduct`. This translator
 allows you to translate arbitrary slices of bits with translators, and then construct the value
-and subsignals from these translations.
+and subsignals from these translations. See [this guide](ADVANCED.md).
 
 #### Arrays
 If your datatype looks more like a homogeneous list, you'll likely want to use `TArray`
@@ -163,11 +163,7 @@ translator' = tStyled "red" translator
 Sometimes, the binary representation of a type does not allow for the translation you want.
 If this is the case, it's by far the easiest to change to using LUTs. However, if you want
 a more performant option, it might be possible to change the bits using the `TChangeBits`
-translator.
-
-'TChangeBits' has a field `bits` of type `BitPart` which defines what bits get passed on to the
-translator included. 
-
+translator. See [this guide](ADVANCED.md).
 
 #### Creating custom translator configurations
 Although the translators must still process the bits correctly, a lot of
