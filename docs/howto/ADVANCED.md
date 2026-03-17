@@ -5,7 +5,7 @@ to represent types in a way that doesn't quite align with the typical bit layout
 or simply have a little more control than the other translators provide you with,
 without resorting to the use of LUTs.
 
-In that case, the AdvancedProduct, AdvancedSum and BitChange translators might be
+In that case, the AdvancedProduct, AdvancedSum and ChangeBits translators might be
 of use.
 
 > **Note:** These translators all use indices on their binary input. This indexing
@@ -123,9 +123,9 @@ This is the result for `Pointer 16`:
 
 
 
-### BITCHANGE
+### CHANGEBITS
 
-Finally, there is the bitchange translator. This translator does nothing on the
+Finally, there is the ChangeBits translator. This translator does nothing on the
 translation end: it simply modifies the binary input before passing it on to
 its subtranslator.
 
@@ -150,7 +150,7 @@ for creating binary values.
 Say we have a type `LittleEndian` that is just a 24 bit number, and we want to
 display the bytes in hexadecimal format, starting with the least significant byte
 on the left. It's possible to achieve this with an AdvancedProduct translator,
-but also by reordering the bits using BitChange:
+but also by reordering the bits using ChangeBits:
 
 ```hs
 instance Waveform LittleEndian where
