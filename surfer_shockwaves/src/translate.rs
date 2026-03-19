@@ -156,14 +156,16 @@ impl ValuePart {
 impl BitPart {
     /// Manipulate bits according to the `BitPart` structure.
     fn from(&self, bits: &str) -> String {
+        // TODO: use Either<String,&str> for optimization
         match self {
+            BitPart::In => bits.to_string(),
             BitPart::Concat(bps) => bps
                 .iter()
                 .map(|bp| bp.from(bits))
                 .collect::<Vec<_>>()
                 .concat(),
             BitPart::Lit(s) => s.to_string(),
-            BitPart::Slice((a, b)) => bits[*a..*b].to_string(),
+            BitPart::Slice((a, b), bp) => bp.from(bits)[*a..*b].to_string(),
         }
     }
 }
