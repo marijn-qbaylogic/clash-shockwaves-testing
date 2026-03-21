@@ -12,11 +12,12 @@ Surfer extensions, and the folder that VCD files are opened in.
 To find the global configuration folder, simply look at the logging output of
 Surfer:
 ```
-SHOCKWAVES: Looking for global config file: Looking for global config file: /home/marijn/.config/surfer/translators/shockwaves.toml
+SHOCKWAVES: Looking for global config file: Looking for global config file: /home/me/.config/surfer/translators/shockwaves/config.toml
 ```
 
-A similar message appears indicating the local directory whenever a file is opened. 
-In either of these directories, create a file called `shockwaves.toml`.
+A similar message appears indicating the local directory whenever a file is opened.
+Create a file called `config.toml` in the global Shockwaves config directory,
+or a file called `shockwaves.toml` in the same folder as the VCD file.
 If the file is found and readable, the logs will look something like this:
 
 ```
@@ -24,7 +25,7 @@ If the file is found and readable, the logs will look something like this:
 ```
 
 The following sections explain how to add settings. Keep in mind that local settings
-overwrite global settings. A template configuration file can be found [here](config/shockwaves.toml).
+overwrite global settings. A good default configuration file template can be found [here](config/shockwaves.toml).
 
 ### ERROR PROPAGATION
 
